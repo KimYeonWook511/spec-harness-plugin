@@ -1,0 +1,11 @@
+{
+  "name": "harness",
+  "owner": { "name": "KimYeonWook511" },
+  "plugins": [
+    {
+      "name": "spec-harness",
+      "source": "./",
+      "description": "SDD 하네스 (엔진 + opt-in 방법론)"
+    }
+  ]
+}

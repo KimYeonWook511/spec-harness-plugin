@@ -1,0 +1,17 @@
+# 하나의 bounded context를 기술하는 템플릿. <...>를 채운다.
+bounded_context:
+  name: <컨텍스트 이름>               # 예: payment
+  responsibility: <이 컨텍스트가 책임지는 것 한 줄>
+
+  # 이 컨텍스트 안에서 통용되는 용어 (자세한 정의는 ubiquitous-language-glossary)
+  language: [<용어1>, <용어2>]
+
+  # 이 컨텍스트가 담는 aggregate들
+  aggregates: [<Aggregate1>, <Aggregate2>]
+
+  # 다른 컨텍스트와의 관계.
+  # 직접 내부를 참조하지 않고 계약(식별자·포트)으로만 연결한다.
+  relationships:
+    - context: <상대 컨텍스트>
+      direction: <이 컨텍스트가 부른다 | 불린다>
+      via: <계약 수단 — 식별자 참조 / 포트 이름>

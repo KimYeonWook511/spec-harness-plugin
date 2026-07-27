@@ -1,0 +1,22 @@
+# Aggregate 하나를 spec에 기술하는 템플릿. <...>를 채운다.
+aggregate:
+  name: <Aggregate 이름>              # 예: Reservation
+  root: <루트 엔티티 이름>            # 외부는 이 루트를 통해서만 aggregate에 접근한다
+  purpose: <이 aggregate가 지키는 일관성은 무엇인가>
+
+  # 이 aggregate 안에 함께 묶여 한 트랜잭션으로 바뀌는 것들
+  members:
+    - <엔티티/값 객체 이름> — <역할>
+
+  # 항상 참인 규칙. 생성·전이 시 여기서 검증된다.
+  invariants:
+    - <불변식 서술>                    # 예: 종료 시각은 시작 시각보다 늦다
+
+  # 상태가 있다면, 허용되는 전이만 적는다 (없으면 states/transitions 생략)
+  states: [<상태1>, <상태2>]
+  transitions:
+    - "<상태A> -> <상태B> : <전이를 일으키는 행위/조건>"
+
+  # 다른 aggregate는 객체가 아니라 식별자로만 참조한다
+  references_by_id:
+    - <다른 Aggregate 이름> (<식별자 필드>)

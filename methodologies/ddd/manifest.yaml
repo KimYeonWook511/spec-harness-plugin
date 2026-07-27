@@ -1,0 +1,49 @@
+# ddd 방법론 플러그인의 등록표.
+# 엔진은 이 파일만 읽고 ddd를 켜고·끄고·다른 방법론과 엮는다.
+# "무엇을 검사할지"는 여기서 선언하고, "어떻게 강제할지"는 각 repo(인스턴스)가 채운다.
+
+name: ddd
+description: 도메인 모델에 불변식·상태전이·경계를 캡슐화하는 전술 설계 규율
+version: 0.1.0
+
+# spec 단계에서 이 방법론이 요구하는 산출물
+requires_in_spec:
+  - ubiquitous-language 용어집   # 도메인 용어 정의 (templates/ubiquitous-language-glossary.yaml)
+  - aggregate 경계 명시           # 어떤 엔티티가 한 aggregate인지 (templates/aggregate.yaml)
+
+# 이 방법론이 데려오는 전용 agent
+agents:
+  - name: domain-expert
+    file: agents/domain-expert.md
+    modes:
+      - consult   # Specify/Clarify/Plan에서 대화 상대로 모델을 함께 잡는다
+      - review    # Analyze 게이트에서 설계를 검토하고 리포트한다
+
+# Analyze 단계에 더해지는 검사.
+# 규칙 자체를 서술하며 특정 언어·프레임워크를 전제하지 않는다.
+adds_checks:
+  - id: aggregate-refs-by-id
+    rule: cross-aggregate 참조는 객체가 아니라 식별자(ID)로 한다. same-aggregate만 객체로 참조한다.
+  - id: invariants-at-factory
+    rule: 엔티티 생성 불변식은 이름 있는 정적 팩토리 한 관문에 모은다. 필수값 누락을 생성 시점에 막는다.
+  - id: state-transition-encapsulated
+    rule: 상태 전이는 의미를 드러내는 엔티티 메서드로만 한다. public setter를 두지 않는다.
+  - id: state-or-time-rule-in-domain
+    rule: 상태·시간에서 파생되는 규칙은 흐름(usecase)·트랜잭션(service)이 아니라 도메인(policy/엔티티)에 둔다.
+  - id: layer-dependency-inward
+    rule: 모든 의존은 도메인을 향한다. 도메인은 바깥 레이어·기술을 참조하지 않는다.
+
+# 이 방법론이 제공하는 spec 템플릿
+templates:
+  - aggregate
+  - bounded-context
+  - ubiquitous-language-glossary
+
+# 검사를 "무엇으로" 강제하는지는 방법론이 정하지 않는다.
+# 각 repo가 자기 도구(정적 분석·아키텍처 테스트 등)로 바인딩한다.
+enforcement: instance-defined
+
+# 조합 제약 — 다른 방법론과 함께 켤 때 엔진이 검증한다
+requires: []
+conflicts_with: []
+min_engine_version: "0.1.0"

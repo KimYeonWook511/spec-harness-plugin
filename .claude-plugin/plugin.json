@@ -1,0 +1,7 @@
+{
+  "name": "spec-harness",
+  "description": "명세를 먼저 확정하고 그 명세가 구현을 끌고 가는 SDD 하네스. 방법론(ddd 등)은 opt-in으로 켠다.",
+  "version": "1.0.0",
+  "author": { "name": "KimYeonWook511" },
+  "keywords": ["sdd", "harness", "spec-driven"]
+}
