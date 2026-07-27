@@ -87,5 +87,18 @@ spec 작업 공간을 추적하지 않는 것은 하네스의 설계다 — 진�
 
 ## 버전 관리
 
-`plugin.json`의 `version` + git 태그로 관리한다. 새 버전은 내용을 고치고 version을 올리는 커밋/태그이며,
-사용하는 repo는 `/plugin update`로 받는다.
+`plugin.json`의 `version` + git 태그(`v<version>`)로 관리한다. 새 버전은 내용을 고치고 version을 올리는
+커밋·태그다. version을 올리지 않으면 쓰는 쪽이 같은 버전으로 보고 캐시를 유지한다.
+
+### 새 버전 받기
+
+```
+/plugin marketplace update KimYeonWook511-harness
+```
+
+이 한 줄로 끝난다 — 마켓플레이스 정보를 다시 가져오면서 설치된 플러그인까지 새 version으로 올린다
+(`N plugin bumped`가 그 뜻이다). 반대로 이 단계를 건너뛰고 `/plugin update`만 실행하면, 아직 옛 version을
+최신으로 알고 있어 아무 일도 일어나지 않는다.
+
+적용 확인은 `/plugin list`의 version 표시로 한다(명령이 성공해도 출력이 없을 수 있어, 무출력을 실패로
+읽으면 안 된다).
