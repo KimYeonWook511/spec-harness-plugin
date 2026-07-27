@@ -42,7 +42,7 @@ docs/specs/<spec>/                  # ── 작업 중 .gitignore (워킹트리
 
 > spec 문서 템플릿들과 `workflow-checklist.json` 골격은 템플릿 폴더에 있다(기본은 이 스킬이 싣고 있는 것, 저장소가 설정으로 자기 템플릿을 지정할 수 있다 — `SKILL.md`의 템플릿 폴더 설명 참고). **checklist는 Specify(2)에서 worktree를 만들 때 복사해 생성**하고, 설계 문서(plan·architecture·data-model 등)는 통째로 복사하지 않고 Plan(4)에서 필요한 것만 꺼내 만든다. 실제 spec 인스턴스는 작업 중 git에 추적되지 않는다(아래 `.gitignore` 참고).
 
-루트 문서(`docs/adr/`, `docs/logging-conventions.md`, `docs/commit-conventions.md` 등)는 전역 베이스다.
+저장소의 루트 문서(ADR·규칙 문서 등)는 전역 베이스다.
 spec 문서가 이번 작업의 구체 결정, 루트 문서가 전역 원칙이다(충돌 시 spec 우선).
 
 ---
@@ -140,6 +140,9 @@ step 문서(`stepN.md`)는 자유 형식의 구현 지시 + `## Acceptance Crite
 - **`# expect: N`** 형태의 주석은 **바로 다음 명령**의 기대 exit code를 지정한다.
 - 그 외 `#` 주석은 무시.
 - 기대 exit를 지정하지 않은 명령의 기본 기대값은 **0**.
+- 명령은 **워크트리 루트에서 셸로 실행된다.** 그래서 파일 경로는 **저장소 루트 기준 상대경로**로 쓴다
+  (`src/...`·`build.gradle` 처럼). 머신마다 다른 절대경로(홈 디렉터리로 시작하는 경로 등)를 쓰지 마라 —
+  다른 머신·다른 워크트리에서 깨지고, 개인 경로가 아카이브되는 spec 문서에 그대로 남는다.
 
 ### 예시
 
@@ -147,21 +150,24 @@ step 문서(`stepN.md`)는 자유 형식의 구현 지시 + `## Acceptance Crite
 ## Acceptance Criteria
 
 ​```bash
-./gradlew :domain:test --tests "*MoneyTest"
+<테스트 실행 명령> <Money 관련 테스트만 고르는 인자>
 # expect: 1
-test -f src/main/java/legacy/OldMoney.java
+test -f src/.../<삭제됐어야 하는 파일>
 ​```
 ```
 
-- 첫 명령 `./gradlew ...`: 기대 exit 0 (지정 없음) → 테스트 통과해야 ok.
-- 둘째 명령 `test -f ...OldMoney.java` + `# expect: 1`: **파일이 없어야** ok
+- 첫 명령(테스트 실행): 기대 exit 0 (지정 없음) → 테스트가 통과해야 ok.
+- 둘째 명령 `test -f src/...` + `# expect: 1`: **파일이 없어야** ok
   (있으면 `test -f`가 0을 반환하는데 기대는 1이므로 실패). "이 파일이 삭제됐어야 한다"를 표현.
+  경로가 저장소 루트 기준 상대경로인 점에 주의한다.
 
-> `# expect:`로 기대 exit를 명시하면 위 둘째처럼 "없어야 한다"(exit 1 기대) 류 AC도 표현된다.
+> 테스트·빌드 명령은 그 프로젝트가 쓰는 것을 그대로 적는다 — 하네스는 특정 빌드 도구를 전제하지 않고,
+> 셸에서 실행되는 명령과 기대 exit code만 본다. `# expect:`로 기대 exit를 명시하면 위 둘째처럼
+> "없어야 한다"(exit 1 기대) 류 AC도 표현된다.
 
 ### 동시성 정합 요구의 AC
 
-find-or-create·race-convergence 같은 동시성 정합 요구가 있는 step은 AC에 **실제 동시성/통합 테스트**를 건다. slice/단위 테스트는 provider·repository를 mock해 실제 tx 스냅샷 거동을 재현하지 못하므로 경합 수렴 버그를 놓친다 — 실제 DB(Testcontainers) + 병행 스레드로 경합을 재현하는 테스트를 AC 커맨드로 두어야 하며, targeted/slice 테스트만으로 통과시키지 않는다. 동시성 테스트 작성 방식은 `test-code-conventions.md`의 "동시성 테스트 작성 규칙"과 Application 통합 병행 전략을 따른다.
+같은 자원을 동시에 만들거나 갱신하는 경합 수렴처럼 **동시 실행 시의 정합**을 요구하는 step은 AC에 **실제 경합을 재현하는 테스트**를 건다. 협력 객체를 대역으로 바꾼 단위·부분 테스트는 실제 트랜잭션·잠금 거동을 재현하지 못해 경합 버그를 놓치므로, 실제 저장소를 쓰고 병행 실행으로 경합을 일으키는 테스트를 AC 명령으로 두어야 하며 단위·부분 테스트만으로 통과시키지 않는다. 그 테스트를 어떻게 쓰는지는 이 저장소가 지정한 규칙 문서를 따른다.
 
 ---
 
@@ -177,7 +183,7 @@ verify-ac가 실행할 때마다 그 attempt 결과를 누적 기록한다(감�
       "attempt": 1,
       "passed": false,
       "results": [
-        { "command": "./gradlew test", "expectExit": 0, "actualExit": 1, "ok": false }
+        { "command": "<테스트 명령>", "expectExit": 0, "actualExit": 1, "ok": false }
       ]
     },
     { "attempt": 2, "passed": true, "results": [ ... ] }

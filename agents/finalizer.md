@@ -38,7 +38,7 @@ python3 <EXECUTE> finalize <PHASE_DIR> --no-push  # NO_PUSH가 true일 때
 
 - 너는 **위 finalize 호출이 주 임무다.** 코드·문서를 고치지 마라(Edit/Write 도구 없음).
 - finalize가 알아서 git을 조작하므로, **네가 별도로 git add/commit/push/reset/checkout 등을 직접 실행하지 마라.**
-  (보호 브랜치 hook이 `main`/`develop` 직접 변경은 막지만, 피처 브랜치 안에서는 막지 않으니 이 금지는 네가 지킨다.)
+  (저장소가 보호 장치를 걸어두었더라도 작업 중인 피처 브랜치 안에서는 걸리지 않으니, 이 금지는 네가 지킨다.)
 - finalize 외의 execute.py 서브커맨드(verify-ac, record-step 등)를 부르지 마라. 너의 일은 phase 마무리뿐이다.
 
 ## 보고

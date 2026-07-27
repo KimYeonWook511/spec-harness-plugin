@@ -26,9 +26,12 @@ python3 <EXECUTE> build-context <PHASE_DIR> --step <STEP>
 
 이 명령은 JSON을 출력한다:
 `{ "context": "...", "previous_steps": "...", "step_text": "..." }`.
-- `context`: CLAUDE.md·spec 문서·필수 코딩 컨벤션 요약·이 step이 참조한 문서.
+- `context`: 프로젝트 규칙 문서(`CLAUDE.md`)·spec 문서·이 저장소가 지정한 규칙 문서·이 step이 참조한 문서.
 - `previous_steps`: 이전 완료 step들의 summary(있으면).
 - `step_text`: 이번 step 문서 전문(`## Acceptance Criteria` 포함).
+
+`context` 끝에 `## 하네스 설정 알림` 블록이 있으면, 규칙 문서를 못 찾았거나 일부만 실렸다는 뜻이다.
+그 내용을 반환 JSON의 `struggles`에 남겨 사람이 설정을 고칠 수 있게 하라.
 
 이 셋을 읽고 작업의 기준으로 삼아라.
 
@@ -38,22 +41,25 @@ python3 <EXECUTE> build-context <PHASE_DIR> --step <STEP>
 2. **우선순위**: 이번 작업의 spec 문서(`docs/specs/<spec-name>/*`)를 우선 따르고, 루트 문서(`docs/*`)는 전역 베이스다.
    같은 종류가 양쪽에 있으면 spec 문서가 이번 작업의 구체 결정, 루트 문서가 전역 원칙이다.
 
-## 필수 컨벤션 (구속력 있는 규칙)
+## 필수 규칙 (구속력 있는 규칙)
 
-`context`에 실린 **필수 코딩 컨벤션 요약(logging/exception/testing/package-structure)** 을 자기 판단보다 우선해 준수한다.
-요약만으로 불확실하면 추측하지 말고 `Read`로 해당 전문(`docs/logging-conventions.md` 등)을 직접 열어 확인하라.
+`context`에 **규칙 문서** 블록이 실려 있으면, 그 내용을 자기 판단보다 우선해 준수한다. 이 저장소가
+"항상 지켜야 한다"고 지정한 규칙이다. 일부만 실려 있어(지정한 섹션만 주입된 경우) 불확실하면 추측하지
+말고 `Read`로 그 문서 전문을 직접 열어 확인하라. 규칙 문서 블록이 없으면 이 저장소가 규칙 문서를 따로
+지정하지 않은 것이다 — 그때는 `context`에 실린 프로젝트 규칙(`CLAUDE.md`)과 기존 코드의 방식(이름·구조·
+테스트 형태)을 기준으로 삼는다.
 
-**★ 코드 자립성 (spec ID 금지)** — 네가 쓰는 주석·Javadoc·`@DisplayName`·테스트 메서드명에
-`FR-###`·`SC-###`·`ADR-L#` 같은 **spec·ADR 내부 식별자를 절대 넣지 마라.** spec은 작업 후 아카이브되고
-코드만 남으므로, 코드에 적힌 그 ID는 나중 독자에게 무의미해진다. spec·adr을 근거로 구현하는 것은 맞지만
-그 근거는 ID가 아니라 **문장으로** 코드에 적는다.
+**★ 코드 자립성 (spec 식별자 금지)** — 네가 쓰는 주석·문서화 주석·테스트 이름에 spec·ADR의 내부 식별자
+(`FR-###`·`SC-###`·`ADR-L#` 형태의 항목 번호)를 **절대 넣지 마라.** spec은 작업이 끝나면 아카이브되고
+코드만 남으므로, 코드에 적힌 그 번호는 나중 독자에게 무의미해진다. spec·adr을 근거로 구현하는 것은 맞지만
+그 근거는 번호가 아니라 **문장으로** 코드에 적는다.
 (나쁨: `…검증한다(SC-002 계열, FR-008).` / 좋음: `…검증한다.` 또는 `…이 정합의 핵심이므로 …로 검증한다.`)
-이 금지는 `CLAUDE.md` "핵심 규칙" 7번이며, reviewer가 위반 시 재작업을 요구한다.
+reviewer가 위반 시 재작업을 요구한다.
 
 ## ADR 우선순위와 유연성
 
 - **spec ADR(`docs/specs/<spec-name>/adr.md`)** 이 이번 작업의 결정사항이다. 최대한 따른다.
-- **루트 ADR(`docs/adr/`)** 은 전역 베이스다. spec ADR이 안 다루는 영역은 루트 ADR을 따른다.
+- **저장소의 루트 ADR**(전역 설계 결정 기록)은 전역 베이스다. spec ADR이 안 다루는 영역은 루트 ADR을 따른다.
 - **멈추지 말고 능동적으로**: ADR·문서가 정하지 않은 영역이거나 예상치 못한 상황이면, 멈추지 말고 합리적으로 판단해
   진행하라. 그 근거를 반환 JSON의 `struggles`에 남겨라.
 - **충돌 시**: ADR과 명백히 충돌하는 구현이 불가피하면, 강행하지도 즉시 실패 처리하지도 마라. 가장 합리적인 방향으로
@@ -67,7 +73,7 @@ python3 <EXECUTE> build-context <PHASE_DIR> --step <STEP>
 3. 기존 테스트를 깨뜨리지 마라.
 4. git add/commit/push/checkout은 실행하지 마라. 커밋은 spec-harness:committer가 처리한다.
 5. step 요구사항·Acceptance Criteria·spec 문서·root docs를 **실패 회피 목적으로 임의 수정하지 마라.**
-6. **루트 상태 문서(`docs/api-spec.md`·`docs/architecture.md`·`docs/db-schema.md`)를 실행 중 수정하지 마라.** 코드가 spec 설계와 달라지면 해당 spec 폴더의 설계 md(`docs/specs/<spec-name>/architecture.md`·`api-spec.md`·`db-schema.md`)를 as-built로 갱신한다. `spec.md`(요구·완료 기준)는 실행 중 편집하지 마라 — 요구 변경은 Clarify로 되돌아간다. 루트 승격은 Stage 8(Root Sync)이 한다.
+6. **저장소의 루트 상태 문서(API 계약·구조·스키마처럼 현재 상태를 기록하는 문서)를 실행 중 수정하지 마라.** 코드가 spec 설계와 달라지면 spec 폴더에 있는 같은 종류의 설계 문서를 as-built로 갱신한다. `spec.md`(요구·완료 기준)는 실행 중 편집하지 마라 — 요구 변경은 Clarify로 되돌아간다. 루트 승격은 Stage 8(Root Sync)이 한다.
 
 ## ★ 상태 파일 계약 (반드시 지킬 것)
 
@@ -88,7 +94,7 @@ python3 <EXECUTE> verify-ac <PHASE_DIR> --step <STEP> --attempt <ATTEMPT>
 이 명령이 step 문서의 `## Acceptance Criteria` 명령들을 실행하고 **기대 exit code와 비교**해
 `{ "passed": bool, "results": [{command, expectExit, actualExit, ok}, ...] }`를 출력한다.
 (step 문서가 `# expect: N`으로 기대 exit를 명시할 수 있다. 미지정이면 0이 기본이다.)
-이 출력 JSON을 그대로 받아 아래 반환의 `ac` 필드에 실어라. **AC를 네가 따로 `./gradlew` 등으로 돌리지 마라** —
+이 출력 JSON을 그대로 받아 아래 반환의 `ac` 필드에 실어라. **AC 명령을 네가 따로 직접 돌리지 마라** —
 verify-ac 한 번이 검증의 단일 경로다. (디버깅 목적의 테스트 실행은 자유지만, 게이트가 되는 검증은 verify-ac다.)
 
 ## ★ 결과 반환 계약 (너의 마지막 행동)

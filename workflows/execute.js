@@ -111,7 +111,7 @@ function reviewerPrompt(a, step, attempt, dev) {
 
 function committerPrompt(a, step, attempt, dev) {
   return `${commonVars(a, step, attempt)}\n\n`
-    + `reviewer가 승인한 step ${step.step}(${step.name})의 변경을 commit-conventions에 따라 목적별로 커밋하라.\n`
+    + `reviewer가 승인한 step ${step.step}(${step.name})의 변경을 이 저장소의 커밋 규칙에 따라 목적별로 커밋하라.\n`
     + `developer summary: ${dev.summary || ''}\n`
     + `약속된 결과 JSON 한 개만 반환하라.`;
 }

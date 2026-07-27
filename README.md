@@ -49,14 +49,16 @@ Claude Code 플러그인으로 배포한다.
 하네스는 어느 문서가 그 저장소의 규칙인지 알지 않는다. 규칙으로 읽을 문서는 저장소가 직접 나열한다.
 설정이 없으면 문서 주입 없이 코어 흐름만 돈다(오류가 아니다).
 
-`.spec-harness/config.json`:
+`.spec-harness/config.json` (아래 문서 이름·경로는 모두 **예시**다 — 저장소가 실제로 쓰는 이름을 적는다.
+하네스는 특정 파일 이름을 요구하지 않는다):
 
 ```json
 {
   "rule_docs": [
     { "path": "docs/coding-rules.md", "section": "## 핵심 원칙" },
-    "docs/spec-constitution.md"
+    "docs/design-principles.md"
   ],
+  "commit_rule_docs": ["docs/commit-rules.md"],
   "reference_docs": ["docs/api-spec.md", "docs/db-schema.md"],
   "template_dir": "docs/specs/_template"
 }
@@ -65,6 +67,10 @@ Claude Code 플러그인으로 배포한다.
 - **`rule_docs`** — 구현 단계에서 **항상 주입**하는 규칙 문서. 문자열이면 문서 전문, 객체면 지정한
   섹션만 넣는다. 섹션 문자열은 저장소가 정하며 하네스는 특정 제목을 전제하지 않는다. 지정한 섹션을
   찾지 못하면 전문을 넣고 그 사실을 컨텍스트에 알림으로 남긴다(규칙이 조용히 빠지지 않게).
+  구조·의존 방향·예외 처리 같은 설계 규약을 여기 넣으면 정합성 검사 단계도 이 기준으로 판정한다.
+- **`commit_rule_docs`** — 커밋 메시지·커밋 단위 규칙 문서. `rule_docs`와 따로 두는 이유는 커밋 규칙이
+  구현할 때가 아니라 커밋할 때만 필요하고, 커밋을 담당하는 에이전트는 문서를 탐색할 도구가 없어 경로를
+  명시로 받아야 하기 때문이다. 지정이 없으면 최근 커밋 메시지의 실제 형식을 따른다.
 - **`reference_docs`** — step 문서가 그 경로를 언급할 때만 주입하는 참고 문서.
 - **`template_dir`** — spec 문서 템플릿을 저장소가 자기 것으로 쓰고 싶을 때만 지정한다. 지정이 없거나
   그 경로가 없으면 이 플러그인이 싣고 있는 기본 템플릿을 쓴다. 그래서 템플릿을 준비하지 않은

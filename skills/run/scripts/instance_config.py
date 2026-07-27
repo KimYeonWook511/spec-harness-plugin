@@ -38,6 +38,10 @@ RUNTIME_RELPATH = ".spec-harness/run"
 DEFAULTS: dict = {
     "rule_docs": [],
     "reference_docs": [],
+    # 커밋 메시지·커밋 단위 규칙 문서. rule_docs와 따로 두는 이유: rule_docs는 step마다 구현 컨텍스트로
+    # 주입되는데 커밋 규칙은 커밋할 때만 필요하고, 커밋 담당 agent는 문서를 탐색할 도구가 없어 경로를
+    # 명시로 받아야 한다.
+    "commit_rule_docs": [],
     # spec 문서 템플릿을 저장소가 자기 것으로 쓰고 싶을 때만 지정한다(저장소 루트 기준 상대경로).
     # 없으면 플러그인이 싣고 있는 기본 템플릿을 쓴다 — 템플릿이 없는 저장소에서도 시작할 수 있도록.
     "template_dir": None,
