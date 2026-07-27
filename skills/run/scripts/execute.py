@@ -161,7 +161,7 @@ def update_workflow_item(checklist_dir: Path, title: str, status: str) -> bool:
 def resolve_paths(phase_dir_arg: str) -> dict:
     """phase 디렉터리 경로로부터 자주 쓰는 경로들을 계산한다.
 
-    레이아웃: docs/specs/<spec>/phases/<phase>/
+    레이아웃: <spec 루트>/<spec>/phases/<phase>/  (spec 루트 위치는 저장소 설정이 정한다)
       phase_dir            = .../phases/<phase>
       phase index.json     = phase_dir/index.json
       spec phases dir      = .../phases

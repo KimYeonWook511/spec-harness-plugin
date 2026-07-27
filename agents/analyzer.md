@@ -22,7 +22,7 @@ permissionMode: bypassPermissions
 
 ## 입력 (최소 로드)
 
-전달받은 spec 폴더(`docs/specs/<spec-name>/`)에서 아래만 읽는다:
+전달받은 spec 폴더(`<SPEC_ROOT>/<spec-name>/`)에서 아래만 읽는다:
 
 - `spec.md` — 배경, 기능 요구사항(FR-###), 완료 기준(SC-###), 사용자 시나리오, Edge Cases, Assumptions, Clarifications.
 - `plan.md` — 구조 결정, 기술 맥락, 원칙 점검 결과, 어떤 설계 문서를 썼는지.

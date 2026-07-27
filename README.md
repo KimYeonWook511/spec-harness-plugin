@@ -60,7 +60,15 @@ Claude Code 플러그인으로 배포한다.
   ],
   "commit_rule_docs": ["docs/commit-rules.md"],
   "reference_docs": ["docs/api-spec.md", "docs/db-schema.md"],
-  "template_dir": "docs/specs/_template"
+  "template_dir": "docs/specs/_template",
+  "spec_root": "docs/specs",
+  "workspace": {
+    "mode": "worktree",
+    "base_ref": "develop",
+    "branch_pattern": "<type>/<name>",
+    "worktree_pattern": "worktrees/<type>-<name>",
+    "types": ["feat", "fix", "refactor", "chore"]
+  }
 }
 ```
 
@@ -75,6 +83,14 @@ Claude Code 플러그인으로 배포한다.
 - **`template_dir`** — spec 문서 템플릿을 저장소가 자기 것으로 쓰고 싶을 때만 지정한다. 지정이 없거나
   그 경로가 없으면 이 플러그인이 싣고 있는 기본 템플릿을 쓴다. 그래서 템플릿을 준비하지 않은
   저장소에서도 바로 시작할 수 있다.
+- **`spec_root`** — spec 작업 공간이 사는 곳(기본 `docs/specs`). 하네스가 spec 폴더를 만들고 찾는 기준점이다.
+- **`workspace`** — 작업 공간을 어떻게 만드는지. 저장소마다 브랜치 모델이 달라 값으로 받는다.
+  - `mode`: `worktree`(기본, 별도 디렉터리에 워크트리를 만들어 메인 체크아웃을 건드리지 않음) 또는 `branch`
+    (현재 체크아웃에서 브랜치만 새로 만듦).
+  - `base_ref`: 분기 기준 브랜치. 지정이 없으면 저장소의 기본 브랜치를 쓴다 — 하네스가 특정 브랜치 이름을
+    가정하지 않는다.
+  - `branch_pattern`·`worktree_pattern`: 이름 형식. `<type>`은 작업 종류, `<name>`은 spec 이름으로 치환된다.
+  - `types`: 허용하는 작업 종류 목록. 비어 있으면 하네스가 값을 만들지 않고 사용자에게 확인한다.
 
 ### .gitignore
 

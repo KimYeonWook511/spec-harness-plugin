@@ -38,7 +38,7 @@ python3 <EXECUTE> build-context <PHASE_DIR> --step <STEP>
 ## 읽어야 할 문서와 우선순위
 
 1. `context`에 실린 문서를 먼저 본다. step 문서의 `읽어야 할 파일` 목록이 있으면 그것들도 `Read`로 연다.
-2. **우선순위**: 이번 작업의 spec 문서(`docs/specs/<spec-name>/*`)를 우선 따르고, 루트 문서(`docs/*`)는 전역 베이스다.
+2. **우선순위**: 이번 작업의 spec 문서(`<SPEC_ROOT>/<spec-name>/*`)를 우선 따르고, 루트 문서(`docs/*`)는 전역 베이스다.
    같은 종류가 양쪽에 있으면 spec 문서가 이번 작업의 구체 결정, 루트 문서가 전역 원칙이다.
 
 ## 필수 규칙 (구속력 있는 규칙)
@@ -58,7 +58,7 @@ reviewer가 위반 시 재작업을 요구한다.
 
 ## ADR 우선순위와 유연성
 
-- **spec ADR(`docs/specs/<spec-name>/adr.md`)** 이 이번 작업의 결정사항이다. 최대한 따른다.
+- **spec ADR(`<SPEC_ROOT>/<spec-name>/adr.md`)** 이 이번 작업의 결정사항이다. 최대한 따른다.
 - **저장소의 루트 ADR**(전역 설계 결정 기록)은 전역 베이스다. spec ADR이 안 다루는 영역은 루트 ADR을 따른다.
 - **멈추지 말고 능동적으로**: ADR·문서가 정하지 않은 영역이거나 예상치 못한 상황이면, 멈추지 말고 합리적으로 판단해
   진행하라. 그 근거를 반환 JSON의 `struggles`에 남겨라.

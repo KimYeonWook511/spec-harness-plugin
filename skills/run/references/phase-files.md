@@ -16,7 +16,7 @@ SKILL.md의 흐름을 이해한 뒤, 구체 스펙이 필요할 때 이 문서�
 ## 1. 디렉터리 레이아웃
 
 ```
-docs/specs/<spec>/                  # ── 작업 중 .gitignore (워킹트리 휘발 작업 공간)
+<SPEC_ROOT>/<spec>/                  # ── 작업 중 .gitignore (워킹트리 휘발 작업 공간)
 ├── spec.md                         # spec 작업 스펙 (제품 전체 명세 아님)
 ├── plan.md                         # 총괄 설계서 (하위 설계 문서의 상위 인덱스)
 ├── architecture.md                 # 구조·레이어·데이터 흐름 (delta 스냅샷, plan 하위)
@@ -247,7 +247,7 @@ workflow(JS)는 각 agent의 반환 JSON으로 분기한다. agent는 **마지�
 
 ## 6. 실행 산출물 vs 정본
 
-**`docs/specs/<spec-name>/` 아래는 작업 중 `.gitignore` 대상이다** — spec 문서(spec·plan·architecture·data-model·db-schema·api-spec·adr), phase·step 파일, index·checklist, ac-output·logs를 포함해 작업 중에는 git에 추적되지 않는 **워킹트리 휘발 작업 공간**이다. 그래서 아래 표에는 "커밋 여부" 칸을 두지 않는다(작업 중 전부 커밋 안 함). git에 남는 것은 **spec 폴더 바깥의 코드**이며, 그 커밋은 step별 committer가 만든다. 단 **예외로 `docs/specs/_archive/`는 추적된다** — Stage 8(Root Sync)에서 spec 정본(spec·설계 문서·step 문서)을 `_archive/pr-<번호>-<spec명>/`로 복사해 같은 PR에 커밋한다(진행 상태·실행 부산물은 휘발로 남김). 보존 가치가 있는 결정·계약은 Stage 8에서 루트 문서로도 승격된다.
+**`<SPEC_ROOT>/<spec-name>/` 아래는 작업 중 `.gitignore` 대상이다** — spec 문서(spec·plan·architecture·data-model·db-schema·api-spec·adr), phase·step 파일, index·checklist, ac-output·logs를 포함해 작업 중에는 git에 추적되지 않는 **워킹트리 휘발 작업 공간**이다. 그래서 아래 표에는 "커밋 여부" 칸을 두지 않는다(작업 중 전부 커밋 안 함). git에 남는 것은 **spec 폴더 바깥의 코드**이며, 그 커밋은 step별 committer가 만든다. 단 **예외로 `<SPEC_ROOT>/_archive/`는 추적된다** — Stage 8(Root Sync)에서 spec 정본(spec·설계 문서·step 문서)을 `_archive/pr-<번호>-<spec명>/`로 복사해 같은 PR에 커밋한다(진행 상태·실행 부산물은 휘발로 남김). 보존 가치가 있는 결정·계약은 Stage 8에서 루트 문서로도 승격된다.
 
 | 파일 | 누가 쓰나 | 누가 읽나 |
 |---|---|---|

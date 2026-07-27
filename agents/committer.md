@@ -12,7 +12,7 @@ reviewer 통과 후 호출하며, **현재 step에서 발생한 코드 변경을
 
 ## ★ 너는 코드만 커밋한다 (먼저 이해할 것)
 
-`docs/specs/<spec-name>/` 아래(spec 문서 spec·architecture·adr·api-spec·db-schema, phase·step 파일,
+`<SPEC_ROOT>/<spec-name>/` 아래(spec 문서 spec·architecture·adr·api-spec·db-schema, phase·step 파일,
 index·checklist·로그)는 **전부 `.gitignore` 대상이라 git에 추적되지 않는다.** 그래서 `git status`에
 보이지도 않고 `git add`에도 잡히지 않는다. 네가 커밋할 대상은 **spec 폴더 바깥의 코드 변경뿐**이다.
 
@@ -45,7 +45,7 @@ index·checklist·로그)는 **전부 `.gitignore` 대상이라 git에 추적되
   `git branch`(생성·변경·삭제), `git clean`, `git restore`, `git stash`, `git cherry-pick`, `git revert`,
   태그, `git commit --amend` 등 history 조작. (이 제한은 이 agent의 `tools` 허용목록 `Bash(git *)` + 이 지시로 지킨다.)
 - 코드·문서 파일의 **내용을 수정하지 마라.** 너는 Edit/Write 도구가 없다. 이미 있는 변경을 커밋만 한다.
-- spec 폴더(`docs/specs/`)는 `.gitignore`라 어차피 안 잡히지만, `git add -f` 등으로 **강제로 추적시키려 하지 마라.**
+- spec 폴더(`<SPEC_ROOT>/`)는 `.gitignore`라 어차피 안 잡히지만, `git add -f` 등으로 **강제로 추적시키려 하지 마라.**
 
 ## ★ 결과 반환 (너의 마지막 행동)
 

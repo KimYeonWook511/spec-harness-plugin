@@ -5,7 +5,7 @@
 >
 > spec 폴더는 작업 중 `.gitignore`로 휘발 상태다. 작업 종료 시(Stage 8, Root Sync) 이 spec과
 > 설계 문서(architecture·adr·api-spec·db-schema)·step 문서(`step<N>.md`)는
-> `docs/specs/_archive/pr-<PR번호>-<spec명>/`로 복사되어 **같은 PR에 커밋**된다 —
+> `<SPEC_ROOT>/_archive/pr-<PR번호>-<spec명>/`로 복사되어 **같은 PR에 커밋**된다 —
 > 이것이 "왜 이 spec을 했나"의 영구 기록이다.
 > 진행 상태 파일(`index.json`·`workflow-checklist.json`·`ac-output`·`logs`)은 휘발로 남고 승격하지 않는다.
 > 이 spec은 루트 PRD로 승격하지 않는다(루트 PRD는 제품 비전·기능 목록의 상위 인덱스다).

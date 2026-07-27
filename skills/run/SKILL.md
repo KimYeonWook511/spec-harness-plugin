@@ -27,7 +27,7 @@ developer→reviewer→committer→recorder 서브에이전트를 돌린 뒤 fin
 
 작업 단위의 위계를 고정한다.
 
-- **spec**: 최상위 작업 단위. 하나의 `spec.md`(확정·동결된 명세)가 정점이고, `docs/specs/<spec-name>/` 폴더 하나가 한 spec이다. 리팩터링·버그픽스·기능 추가 등 "한 덩어리 작업" 하나가 한 spec.
+- **spec**: 최상위 작업 단위. 하나의 `spec.md`(확정·동결된 명세)가 정점이고, `<SPEC_ROOT>/<spec-name>/` 폴더 하나가 한 spec이다. 리팩터링·버그픽스·기능 추가 등 "한 덩어리 작업" 하나가 한 spec.
 - **phase**: spec 안에서 "그 단위로 한 번 통합·검증할 가치가 있는 덩어리". 기본은 spec당 1개(`0-main`), 강한 선후 의존·중간 검증 가치가 있을 때만 여러 개.
 - **step**: phase 안의 구현 작업 단위. **커밋 1개**에 대응하며 자기완결적 AC를 가진다. Stage 6(Execution)에서 workflow가 실행한다.
 
@@ -50,7 +50,7 @@ developer→reviewer→committer→recorder 서브에이전트를 돌린 뒤 fin
 - `Analyze`(5) 통과 후에는 반드시 멈추고 작성된 문서 경로를 사용자에게 보고한 뒤 검토 응답을 기다린다. 바로 `execute.py` 실행 요청으로 넘어가지 않는다.
 - `execute.py` 실행 전 반드시 사용자에게 진행 의사를 확인하고, 사용자가 진행을 승인한 뒤에만 실행한다(가벼운 확인 — 별도 Plan Mode·`ExitPlanMode` 절차는 거치지 않는다). 자동 코드 검증은 없으므로 이 룰은 agent가 직접 지킨다.
 - Stage 6(Execution)에서 PR을 연 뒤 agent는 멈추고 사용자의 Stage 7(PR Review) 검토 완료 신호를 기다린다. "리뷰 코멘트가 아직 없음"은 Stage 7 완료가 아니다. Stage 7 완료가 확인되기 전에는 Stage 8(Root Sync)에 착수하지 않는다.
-- Stage 8(Root Sync)는 두 가지를 한다. (1) 루트 문서 갱신 — ADR=append, 스냅샷(architecture/db-schema/api-spec)=overwrite로 동작이 다르다. (2) `_archive` 승격 — spec 정본(spec·설계·step 문서)을 `docs/specs/_archive/pr-<번호>-<spec명>/`로 복사해 같은 PR에 커밋한다(진행 상태·실행 부산물은 휘발로 남김). 한 지시로 뭉치지 않는다(아래 Stage 8 참고).
+- Stage 8(Root Sync)는 두 가지를 한다. (1) 루트 문서 갱신 — ADR=append, 스냅샷(architecture/db-schema/api-spec)=overwrite로 동작이 다르다. (2) `_archive` 승격 — spec 정본(spec·설계·step 문서)을 `<SPEC_ROOT>/_archive/pr-<번호>-<spec명>/`로 복사해 같은 PR에 커밋한다(진행 상태·실행 부산물은 휘발로 남김). 한 지시로 뭉치지 않는다(아래 Stage 8 참고).
 
 ---
 
@@ -75,6 +75,15 @@ developer→reviewer→committer→recorder 서브에이전트를 돌린 뒤 fin
 
 ---
 
+## 자리표시자
+
+이 문서의 `<...>`는 실제 값으로 치환해 쓴다.
+
+- **`<SPEC_ROOT>`** — spec 작업 공간이 사는 곳. 저장소 설정(`.spec-harness/config.json`)의 `spec_root`가 있으면 그 값, 없으면 `docs/specs`.
+- **`<SKILL_DIR>`** — 이 스킬(run)의 base directory 절대경로(스킬이 호출될 때 함께 주어진다).
+- **`<TEMPLATE_DIR>`** — 쓸 템플릿 폴더(아래 "템플릿 폴더" 설명 참고).
+- **`<spec-name>`** — 이번 작업의 spec slug.
+
 ## 먼저 읽을 것
 
 항상 먼저 아래를 읽는다.
@@ -84,11 +93,11 @@ developer→reviewer→committer→recorder 서브에이전트를 돌린 뒤 fin
 
 그 다음 현재 작업 대상 spec 문서를 먼저 읽는다.
 
-- `docs/specs/<spec-name>/spec.md`
-- `docs/specs/<spec-name>/architecture.md`
-- `docs/specs/<spec-name>/adr.md`
-- `docs/specs/<spec-name>/api-spec.md`
-- `docs/specs/<spec-name>/db-schema.md`
+- `<SPEC_ROOT>/<spec-name>/spec.md`
+- `<SPEC_ROOT>/<spec-name>/architecture.md`
+- `<SPEC_ROOT>/<spec-name>/adr.md`
+- `<SPEC_ROOT>/<spec-name>/api-spec.md`
+- `<SPEC_ROOT>/<spec-name>/db-schema.md`
 
 spec 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 설정의 `reference_docs`에 나열된 문서를 추가로 읽는다.
 작업 범위에 직접 연결된 코드와 테스트도 함께 읽는다.
@@ -109,7 +118,7 @@ spec 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 설�
 - **외부 기능 명세가 있으면 읽는다** — 이 작업이 더 큰 명세의 한 조각이면 그 부분을 Specify의 출발점으로 넘긴다. (명세가 없으면 생략한다. 리팩터링·버그 수정·탐색적 작업은 사전 명세가 없는 게 정상이다 — 그 경우 대화가 출발점이다.)
 - 작업 범위에 직접 연결된 **코드와 테스트를 읽어** 현재 구조와 변경 범위를 파악한다.
 - 공통 아키텍처, 다른 도메인 ERD, 전역 ADR 같은 루트 `docs/` 기준 문서는 *더 필요할 때만* 추가로 읽는다.
-- 이 작업이 무엇인지 윤곽이 잡히면 **slug 후보**와 type을 머릿속에 떠올려 둔다(허용 타입·형식은 `docs/branch-conventions.md`를 따른다) — 확정은 Specify 초반에 사용자와 한다.
+- 이 작업이 무엇인지 윤곽이 잡히면 **slug 후보**와 작업 종류를 머릿속에 떠올려 둔다(허용 값·이름 형식은 설정의 `workspace`를 따른다) — 확정은 Specify 초반에 사용자와 한다.
 - **재실행이라 이미 worktree·`spec.md`가 있으면** 그 worktree로 이동해 현재 진행 상태를 읽는다(신규 작업엔 해당 없음).
 - 이미 답할 수 있는 질문은 하지 않는다.
 - 병렬 탐색이 가능한 환경이면 관련 영역을 나눠 추가 탐색할 수 있다.
@@ -124,11 +133,15 @@ spec 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 설�
 
 #### 작업 공간 준비 (Specify 맨 앞 — 한 번)
 
-1. **slug·type 확정**: 사용자의 한 줄 작업 설명에서 `<spec-name>` slug와 type을 정한다. **type과 브랜치 형식은 `docs/branch-conventions.md`를 단일 출처로 따른다**(harness가 타입 값을 하드코딩하지 않는다). spec 내용을 다 채우기 전에 *이름만* 먼저 정하는 것이다(slug는 폴더·브랜치 이름일 뿐, 명세의 완성이 아니다). 모호하면 사용자에게 짧게 확인한다.
-2. **worktree 생성·이동**: **브랜치·worktree 생성 방식은 `docs/branch-conventions.md`의 "worktree로 브랜치 생성하기"를 그대로 따른다** — 브랜치 형식 `<type>/<name>`, worktree 디렉토리 `worktrees/<type>-<name>`, `develop` 기준 분기. 여기서 `<name>`은 위에서 정한 `<spec-name>`이다. (harness는 명령을 하드코딩하지 않고 컨벤션을 가리킨다.)
+1. **slug·type 확정**: 사용자의 한 줄 작업 설명에서 `<spec-name>` slug와 작업 종류(type)를 정한다. 종류 값은 설정(`.spec-harness/config.json`)의 `workspace.types`에서 고르고, 그 목록이 비어 있으면 **하네스가 값을 만들지 않고** 최근 브랜치 이름(`git branch -a`)에서 쓰이는 형태를 보거나 사용자에게 짧게 확인한다. spec 내용을 다 채우기 전에 *이름만* 먼저 정하는 것이다(slug는 폴더·브랜치 이름일 뿐, 명세의 완성이 아니다).
+2. **작업 공간 생성·이동**: 설정의 `workspace`를 따른다.
+   - `mode: "worktree"`(기본) — `worktree_pattern`이 정한 디렉터리에 워크트리를 만들고 그 안으로 이동한다. 메인 체크아웃을 건드리지 않아 작업이 섞이지 않는다.
+   - `mode: "branch"` — 현재 체크아웃에서 브랜치만 새로 만들어 작업한다.
+   - 브랜치 이름은 `branch_pattern`, 분기 기준은 `base_ref`를 쓴다. `base_ref`가 없으면 **저장소의 기본 브랜치**를 쓴다(하네스가 특정 브랜치 이름을 가정하지 않는다).
+   - 이름 형식의 `<type>`·`<name>`은 위에서 정한 종류·slug로 치환한다.
 
-   worktree를 만든 뒤 그 안으로 이동하고, 이동 직후 `pwd`(또는 `git branch --show-current`)로 worktree 안인지 반드시 확인한다 — `branch-conventions.md`가 정한 `worktrees/<type>-<spec-name>` 경로 / `<type>/<spec-name>` 브랜치여야 한다. 이후 모든 문서 작성·`execute.py` 실행은 이 worktree 루트 기준이다.
-3. **스캐폴딩(checklist 생성)**: worktree 안에 `docs/specs/<spec-name>/` 폴더를 만들고, 템플릿 폴더(`<TEMPLATE_DIR>` — 아래 참고)의 `workflow-checklist.json`을 `docs/specs/<spec-name>/workflow-checklist.json`으로 복사한다. 이 시점에 8-Stage 진행 추적 checklist가 존재한다(실행 게이트가 이를 읽는다). **설계 문서(plan·architecture·data-model 등)는 지금 복사하지 않는다 — Plan(4)에서 필요한 것만 템플릿 폴더에서 꺼내 만든다.** `spec.md`도 아래에서 새로 만든다.
+   만든 뒤 그 안(또는 그 브랜치)으로 이동하고, 이동 직후 `pwd`와 `git branch --show-current`로 **의도한 위치·브랜치인지 반드시 확인한다.** 이후 모든 문서 작성·`execute.py` 실행은 이 작업 공간의 루트 기준이다.
+3. **스캐폴딩(checklist 생성)**: worktree 안에 `<SPEC_ROOT>/<spec-name>/` 폴더를 만들고, 템플릿 폴더(`<TEMPLATE_DIR>` — 아래 참고)의 `workflow-checklist.json`을 `<SPEC_ROOT>/<spec-name>/workflow-checklist.json`으로 복사한다. 이 시점에 8-Stage 진행 추적 checklist가 존재한다(실행 게이트가 이를 읽는다). **설계 문서(plan·architecture·data-model 등)는 지금 복사하지 않는다 — Plan(4)에서 필요한 것만 템플릿 폴더에서 꺼내 만든다.** `spec.md`도 아래에서 새로 만든다.
 
 > worktree·checklist는 spec당 한 번만 만든다. 재실행이면 이미 있으므로 건너뛴다.
 
@@ -163,7 +176,7 @@ spec 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 설�
 - 외부 인증·API 키·수동 설정 등 사용자 개입이 필요할 때
 - 기존 구조나 규칙과 충돌 가능성이 있을 때
 
-산출: `docs/specs/<spec-name>/spec.md` (배경·시나리오·범위·요구사항·데이터 모델·완료 기준·제약·가정).
+산출: `<SPEC_ROOT>/<spec-name>/spec.md` (배경·시나리오·범위·요구사항·데이터 모델·완료 기준·제약·가정).
 
 #### 작성 전 루트 문서 정합성 확인 (필수)
 
@@ -334,8 +347,8 @@ phase는 "그 단위만으로 한 번 통합·검증할 가치가 있는 덩어�
 - step name은 kebab-case slug를 사용한다.
 
 산출:
-- `docs/specs/<spec-name>/plan.md` (+ 필요한 하위 설계 문서).
-- `docs/specs/<spec-name>/phases/index.json`, `phases/<phase-name>/index.json`, `phases/<phase-name>/step{N}.md`.
+- `<SPEC_ROOT>/<spec-name>/plan.md` (+ 필요한 하위 설계 문서).
+- `<SPEC_ROOT>/<spec-name>/phases/index.json`, `phases/<phase-name>/index.json`, `phases/<phase-name>/step{N}.md`.
 
 포맷과 상세 규칙은 `references/phase-files.md`를 따른다.
 
@@ -347,7 +360,7 @@ phase는 "그 단위만으로 한 번 통합·검증할 가치가 있는 덩어�
 
 구현 전, 작성된 문서들의 **교차 정합성**과 **constitution 위반**을 읽기 전용으로 점검하는 게이트다. spec-kit의 analyze를 따른다 — spec ↔ plan ↔ 설계 문서 ↔ phase/step을 교차 검사해 불일치·중복·모호·미명세·커버리지 공백을 잡는다. context 오염을 막기 위해 **`spec-harness:analyzer` 에이전트를 `Task` 도구로 띄워** 돌린다(읽기 전용 배치라 상호작용이 없다 — Clarify와 반대). 이 단계는 워크플로(Stage 6 전용) 바깥이므로 **메인 에이전트가 직접** 그 에이전트를 호출한다.
 
-> 메인은 `Task` 도구로 `spec-harness:analyzer`를 띄우며, spec 폴더 경로(`docs/specs/<spec-name>/`)를 프롬프트로 전달한다. 에이전트는 아래 입력을 읽어 검출 패스를 돌리고 **마크다운 리포트**를 반환한다. 메인은 그 리포트를 사용자에게 그대로 보여준다. 에이전트는 **절대 파일을 수정하지 않는다**(읽기 전용). 수정은 사용자 승인 후 사람이 한다. (별도 로그는 남기지 않는다 — 리포트가 곧 산출물이다.)
+> 메인은 `Task` 도구로 `spec-harness:analyzer`를 띄우며, spec 폴더 경로(`<SPEC_ROOT>/<spec-name>/`)를 프롬프트로 전달한다. 에이전트는 아래 입력을 읽어 검출 패스를 돌리고 **마크다운 리포트**를 반환한다. 메인은 그 리포트를 사용자에게 그대로 보여준다. 에이전트는 **절대 파일을 수정하지 않는다**(읽기 전용). 수정은 사용자 승인 후 사람이 한다. (별도 로그는 남기지 않는다 — 리포트가 곧 산출물이다.)
 
 #### 입력 (최소 로드)
 
@@ -410,7 +423,7 @@ phase를 완주시키지 않는다 — 대신 preflight로 workflow 인자를 �
 - 이 Stage에 들어가기 전 checklist의 `Explore`, `Specify`, `Clarify`, `Plan + Tasks`, `Analyze`는 모두 `completed`여야 한다.
 - 사용자가 승인하지 않으면 구현으로 진행하지 않는다.
 
-> spec 문서(spec·plan·architecture·data-model·db-schema·api-spec·adr)와 phase·step·index·checklist는 `docs/specs/<spec-name>/` 아래에 있고 **작업 중에는 `.gitignore` 대상**이라 커밋하지 않는다(예외: Stage 8에서 `docs/specs/_archive/`로 승격되는 사본). 따라서 workflow 기동 전 "spec 문서 사전 커밋" 단계는 없다. committer는 코드 변경만 커밋하며, 작업 중 spec 폴더는 git에 잡히지 않는다.
+> spec 문서(spec·plan·architecture·data-model·db-schema·api-spec·adr)와 phase·step·index·checklist는 `<SPEC_ROOT>/<spec-name>/` 아래에 있고 **작업 중에는 `.gitignore` 대상**이라 커밋하지 않는다(예외: Stage 8에서 `<SPEC_ROOT>/_archive/`로 승격되는 사본). 따라서 workflow 기동 전 "spec 문서 사전 커밋" 단계는 없다. committer는 코드 변경만 커밋하며, 작업 중 spec 폴더는 git에 잡히지 않는다.
 
 #### 실행 옵션 수집
 
@@ -434,14 +447,14 @@ workflow 기동 직전, `AskUserQuestion`으로 agent별 모델을 한 번에 �
 
 `phases` 파일이 준비되고 모델이 정해지면, 메인은 **Stage 6 진입과 동시에 아래 ①~③을 하나의 자동 흐름으로 수행한다.** 사람이 단계마다 개입해 in_progress·completed를 일일이 지시하는 게 아니라, 메인이 이 절차를 끝까지 자동으로 진행한다. checklist는 **spec 레벨에 하나**(`workflow-checklist.json`, spec 폴더 바로 아래)이고, 그 안에서 **phase는 여러 개일 수 있다**(각 phase가 자기 step들을 따로 돈다).
 
-> **스크립트 경로 (`<SKILL_DIR>`)**: 아래 명령의 `<SKILL_DIR>`는 이 스킬(run)의 base directory 절대경로다 — 스킬이 호출될 때 함께 주어지는 그 경로를, `docs/specs/<spec-name>` 같은 다른 자리표시자처럼 실제 값으로 치환해 실행한다. 플러그인은 설치 시 전역 캐시로 복사되므로 저장소 상대경로로는 스크립트를 찾을 수 없다. (매 Bash 호출은 새 셸이라 셸 변수로는 이어지지 않으니, 매 명령에서 절대경로로 치환한다.)
+> **스크립트 경로 (`<SKILL_DIR>`)**: 아래 명령의 `<SKILL_DIR>`는 이 스킬(run)의 base directory 절대경로다 — 스킬이 호출될 때 함께 주어지는 그 경로를, `<SPEC_ROOT>/<spec-name>` 같은 다른 자리표시자처럼 실제 값으로 치환해 실행한다. 플러그인은 설치 시 전역 캐시로 복사되므로 저장소 상대경로로는 스크립트를 찾을 수 없다. (매 Bash 호출은 새 셸이라 셸 변수로는 이어지지 않으니, 매 명령에서 절대경로로 치환한다.)
 
 **① Execution을 in_progress로 — 자동, 진입 시 1회**
 
 Stage 6에 들어가면 메인이 곧바로 checklist의 Execution을 in_progress로 표시한다(phase 루프를 시작하기 직전, spec 단위 1회).
 
 ```bash
-python3 "<SKILL_DIR>/scripts/execute.py" set-stage docs/specs/<spec-name> Execution in_progress
+python3 "<SKILL_DIR>/scripts/execute.py" set-stage <SPEC_ROOT>/<spec-name> Execution in_progress
 ```
 
 **② phase 루프 — 모든 phase에 대해 preflight → workflow 반복 (자동)**
@@ -449,8 +462,8 @@ python3 "<SKILL_DIR>/scripts/execute.py" set-stage docs/specs/<spec-name> Execut
 메인은 spec의 각 phase(`0-main`, `1-domain`, …)를 순서대로 돌린다. phase가 하나면 1회, 여러 개면 차례로 반복한다. 사람 개입 없이 이어서 진행한다.
 
 ```bash
-# (2-a) preflight — worktrees/<type>-<spec-name>/ 안에서
-python3 "<SKILL_DIR>/scripts/execute.py" preflight docs/specs/<spec-name>/phases/<phase-name>/
+# (2-a) preflight — 위에서 만든 작업 공간 루트에서
+python3 "<SKILL_DIR>/scripts/execute.py" preflight <SPEC_ROOT>/<spec-name>/phases/<phase-name>/
 ```
 
 STDOUT으로 `{"ok": true, "execute": "...", "phase_dir": "...", "steps": [...], "execution": {...}, ...}`
@@ -473,7 +486,7 @@ workflow는 `pending`인 step부터 순차로 developer→(AC확인)→reviewer�
 phase 루프가 끝나 `phases/index.json`의 모든 phase status가 completed가 되면, 메인이 곧바로 Execution을 completed로 표시하고 Stage 7로 넘어간다.
 
 ```bash
-python3 "<SKILL_DIR>/scripts/execute.py" set-stage docs/specs/<spec-name> Execution completed
+python3 "<SKILL_DIR>/scripts/execute.py" set-stage <SPEC_ROOT>/<spec-name> Execution completed
 ```
 
 > **왜 set-stage가 흐름의 양 끝에만 있나**: in_progress·completed는 *spec 전체*의 Execution 상태라 phase 루프를 감싸는 자리에서 1회씩 자동으로 찍는다. 반면 preflight·finalize는 *phase 단위*라 spec 레벨 Stage를 건드리지 않는다 — phase 하나가 끝났다고 Execution을 completed로 만들면, 남은 phase가 있을 때 어긋나기 때문이다. 그래서 "phase 닫기(finalize)"와 "Execution 닫기(set-stage completed)"를 분리하되, 메인이 ①~③을 한 흐름으로 자동 수행한다.
@@ -500,7 +513,7 @@ workflow 운영 규칙:
 - 사람이 원인을 고친 뒤(예: 누락 문서 보강, 환경 문제 해결), 그 step을 pending으로 되돌린다:
 
 ```bash
-python3 "<SKILL_DIR>/scripts/execute.py" reset-step docs/specs/<spec-name>/phases/<phase-name>/ --step N
+python3 "<SKILL_DIR>/scripts/execute.py" reset-step <SPEC_ROOT>/<spec-name>/phases/<phase-name>/ --step N
 ```
 
   그런 다음 같은 phase로 preflight → `/spec-harness:execute`를 다시 기동하면, 이미 `completed`인 step은
@@ -509,7 +522,7 @@ python3 "<SKILL_DIR>/scripts/execute.py" reset-step docs/specs/<spec-name>/phase
 
 #### 커밋·finalize
 
-step별 committer는 **코드 변경만 커밋**한다. spec 폴더(`docs/specs/<spec-name>/` — spec 문서·phase·step·index·checklist)는 전부 `.gitignore` 대상이라 `git status`·`git add`에 잡히지 않으므로, committer가 신경 쓸 필요가 없다.
+step별 committer는 **코드 변경만 커밋**한다. spec 폴더(`<SPEC_ROOT>/<spec-name>/` — spec 문서·phase·step·index·checklist)는 전부 `.gitignore` 대상이라 `git status`·`git add`에 잡히지 않으므로, committer가 신경 쓸 필요가 없다.
 
 phase 종료 시점에 finalizer(`execute.py finalize`)는 git 커밋을 만들지 않는다. 대신 다음을 한다:
 
@@ -560,7 +573,7 @@ review 처리 방식:
 
 위 루트 동기화와 **별개로**, 이 spec의 작업 기록을 영구 보존한다.
 
-- **`_archive` 승격**: 작업 중 휘발 상태였던 spec 문서 중 **정본만** `docs/specs/_archive/pr-<PR번호>-<spec명>/`로 복사한다. PR 번호는 Stage 6(Execution)에서 PR을 열 때 이미 정해져 있다. `docs/specs/*`는 `.gitignore` 대상이지만 `_archive`는 예외라(`!docs/specs/_archive`), 이 사본만 git에 잡혀 같은 PR에 커밋된다.
+- **`_archive` 승격**: 작업 중 휘발 상태였던 spec 문서 중 **정본만** `<SPEC_ROOT>/_archive/pr-<PR번호>-<spec명>/`로 복사한다. PR 번호는 Stage 6(Execution)에서 PR을 열 때 이미 정해져 있다. `<SPEC_ROOT>/*`는 `.gitignore` 대상이지만 `_archive`는 예외라(`!<SPEC_ROOT>/_archive`), 이 사본만 git에 잡혀 같은 PR에 커밋된다.
   - **승격 대상**: `spec.md`, 설계 문서(`architecture.md`·`adr.md`·`api-spec.md`·`db-schema.md` 중 작성된 것), step 설계 문서(`phases/<phase>/step<N>.md`).
   - **승격 제외(휘발로 남김)**: 진행 상태·실행 부산물 — `phases/index.json`, `phases/<phase>/index.json`, `workflow-checklist.json`, `step<N>-ac-output.json`, `logs/`.
   - 복사만 한다. 내용을 재작성하지 않는다(동결된 정본 그대로 박제). 루트 ADR append는 위에서 이미 했으므로, `_archive`의 `adr.md`는 "이 spec이 그 결정에 어떻게 도달했나"의 맥락 사본이다.
