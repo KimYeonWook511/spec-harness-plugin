@@ -11,10 +11,13 @@ requires_in_spec:
   - ubiquitous-language 용어집   # 도메인 용어 정의 (templates/ubiquitous-language-glossary.yaml)
   - aggregate 경계 명시           # 어떤 엔티티가 한 aggregate인지 (templates/aggregate.yaml)
 
-# 이 방법론이 데려오는 전용 agent
+# 이 방법론이 데려오는 전용 agent.
+# 파일은 플러그인의 agents/ 아래 둔다 — 플러그인은 agent를 조건부로 등록할 수 없어서, 등록은 항상 되고
+# "이 방법론이 켜졌을 때만 소환한다"는 활성 여부로 가른다(설정의 methodologies).
 agents:
   - name: domain-expert
-    file: agents/domain-expert.md
+    file: ../../agents/domain-expert.md
+    invoke_as: spec-harness:domain-expert
     modes:
       - consult   # Specify/Clarify/Plan에서 대화 상대로 모델을 함께 잡는다
       - review    # Analyze 게이트에서 설계를 검토하고 리포트한다

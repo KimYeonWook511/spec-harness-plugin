@@ -47,6 +47,9 @@ DEFAULTS: dict = {
     "template_dir": None,
     # spec 작업 공간이 사는 곳(저장소 루트 기준). 하네스가 spec 폴더를 만들고 찾는 기준점이다.
     "spec_root": "docs/specs",
+    # 이 저장소가 켠 방법론 이름 목록(예: ["ddd"]). 비어 있으면 방법론 무관 코어만 돈다.
+    # 방법론은 검사·요구 산출물·전용 agent를 더하며, 코어 게이트를 끄지는 못한다.
+    "methodologies": [],
     # 작업 공간을 어떻게 만드는지. 저장소마다 브랜치 모델이 달라 값으로 받는다.
     "workspace": {
         # "worktree": 별도 디렉터리에 워크트리를 만들어 그 안에서 작업(메인 체크아웃을 건드리지 않음).
@@ -64,6 +67,10 @@ DEFAULTS: dict = {
 
 # 플러그인이 싣고 있는 기본 템플릿 위치(이 스크립트 기준).
 BUILTIN_TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates" / "spec"
+
+# 방법론 선언이 사는 곳. 이 스크립트는 skills/run/scripts/ 아래이므로 플러그인 루트는 세 단계 위다.
+PLUGIN_DIR = Path(__file__).resolve().parents[3]
+METHODOLOGY_DIR = PLUGIN_DIR / "methodologies"
 
 
 def resolve_template_dir(root_path: Path, config: dict) -> tuple[Path, list[str]]:

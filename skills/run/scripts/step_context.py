@@ -112,6 +112,46 @@ def list_spec_docs(spec_dir: Path) -> list[Path]:
     return docs
 
 
+def build_methodology_notice(config: dict) -> tuple[str, list[str]]:
+    """활성 방법론이 있으면 그 이름과 선언 파일 위치를 알리는 블록을 만든다.
+
+    선언 전문을 싣지 않는 이유: 구현 단계에서 필요한 규칙은 대개 저장소 규칙 문서에 이미 있고,
+    방법론 선언은 단계별 요구·검사 목록이라 매 step 컨텍스트에 넣을 값이 아니다. 다만 어떤 방식으로
+    일하는 저장소인지는 알아야 하므로 이름과 경로를 준다(필요하면 직접 열어 보게).
+    """
+    notes: list[str] = []
+    raw = config.get("methodologies") or []
+    if not isinstance(raw, list):
+        notes.append("methodologies가 목록이 아니라 무시한다.")
+        return "", notes
+
+    names = [item for item in raw if isinstance(item, str) and item]
+    for item in raw:
+        if not (isinstance(item, str) and item):
+            notes.append(f"methodologies 항목 형식이 잘못돼 건너뛴다: {item!r}")
+    if not names:
+        return "", notes
+
+    manifests = [(n, (instance_config.METHODOLOGY_DIR / n / "manifest.yaml")) for n in names]
+    lines = []
+    for name, path in manifests:
+        if path.exists():
+            lines.append(f"- `{name}` — 선언: `{path}`")
+        else:
+            notes.append(f"방법론 '{name}'의 선언 파일을 찾지 못했다: {path}")
+
+    if not lines:
+        return "", notes
+
+    block = "## 활성 방법론\n\n"
+    block += (
+        "이 저장소는 아래 방식으로 일한다. 설계 판단이 갈릴 때 그 방식에 맞는 쪽을 택하고, "
+        "구체 규칙이 필요하면 선언 파일을 직접 열어 확인한다.\n\n"
+    )
+    block += "\n".join(lines)
+    return block, notes
+
+
 def load_step_documents(
     root_path: Path, spec_dir: Path, step_text: str, config: Optional[dict] = None
 ) -> str:
@@ -132,6 +172,13 @@ def load_step_documents(
     for doc in list_spec_docs(spec_dir):
         rel_path = doc.relative_to(root_path).as_posix()
         sections.append(f"## spec 문서 ({rel_path})\n\n{doc.read_text(encoding='utf-8')}")
+
+    # 활성 방법론을 알린다. 규칙 전문을 여기 싣지 않고 선언 파일 위치만 준다 — 구현에 필요한 규칙은
+    # 대개 저장소 규칙 문서가 이미 담고 있고, 매 step마다 방법론 선언 전문을 넣으면 낭비이기 때문이다.
+    methodology_block, methodology_notes = build_methodology_notice(config)
+    notes.extend(methodology_notes)
+    if methodology_block:
+        sections.append(methodology_block)
 
     # 저장소가 규칙으로 지정한 문서를 항상 주입한다.
     # agent가 그 저장소의 규칙을 안 보고 자기 판단으로 코딩하는 것을 막는다.
