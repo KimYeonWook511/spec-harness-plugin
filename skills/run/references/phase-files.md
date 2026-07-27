@@ -24,8 +24,10 @@ SKILL.md의 흐름을 이해한 뒤, 구체 스펙이 필요할 때 이 문서�
 ├── db-schema.md                    # 물리 스키마 변경분 (plan 하위)
 ├── api-spec.md                     # API 변경분 (plan 하위)
 ├── adr.md                          # ADR staging (이번 작업의 결정사항, plan 하위)
+├── scenarios.md                    # (선택) 시나리오를 spec.md에서 분리할 때. 완료 기준별 확인 방법·불변/유동 표시
+├── interview.md                    # 인터뷰 기록 (Specify가 작업 공간을 만들 때 옮겨온 것)
 ├── research.md                     # (선택) 기술 선택 조사 — 새 의존성·미해결 선택 시만
-├── workflow-checklist.json         # spec 레벨: 8-Stage 진행 추적 + 실행 전 게이트(preflight가 검사)
+├── workflow-checklist.json         # spec 레벨: Stage 진행 추적 + 실행 전 게이트(preflight가 검사)
 └── phases/
     ├── index.json                  # spec 레벨: phase 목록과 각 phase status
     └── <phase>/                    # 예: 0-main, 1-domain, 2-api
@@ -36,11 +38,11 @@ SKILL.md의 흐름을 이해한 뒤, 구체 스펙이 필요할 때 이 문서�
         └── logs/                   # (실행 산출) <role>.log 사람용 로그
 ```
 
-> checklist(`workflow-checklist.json`, spec 폴더 바로 아래)는 **spec 레벨에 하나**다. 8-Stage는 spec 전체의 진행이고
+> checklist(`workflow-checklist.json`, spec 폴더 바로 아래)는 **spec 레벨에 하나**다. Stage 진행은 spec 전체의 것이고
 > PR·Root Sync도 spec 단위이므로 phase마다 두지 않는다. phase가 여러 개여도 checklist는 하나이며, 각 phase는
-> 그 안의 step만 workflow로 실행한다. (phases 폴더는 Plan(4)에서 생기지만 checklist는 그보다 먼저 Specify(2)에서 만들어지므로 phases 밖 spec 루트에 둔다.)
+> 그 안의 step만 workflow로 실행한다. (phases 폴더는 Tasks(6)에서 생기지만 checklist는 그보다 먼저 Specify(2)에서 만들어지므로 phases 밖 spec 루트에 둔다.)
 
-> spec 문서 템플릿들과 `workflow-checklist.json` 골격은 템플릿 폴더에 있다(기본은 이 스킬이 싣고 있는 것, 저장소가 설정으로 자기 템플릿을 지정할 수 있다 — `SKILL.md`의 템플릿 폴더 설명 참고). **checklist는 Specify(2)에서 worktree를 만들 때 복사해 생성**하고, 설계 문서(plan·architecture·data-model 등)는 통째로 복사하지 않고 Plan(4)에서 필요한 것만 꺼내 만든다. 실제 spec 인스턴스는 작업 중 git에 추적되지 않는다(아래 `.gitignore` 참고).
+> spec 문서 템플릿들과 `workflow-checklist.json` 골격은 템플릿 폴더에 있다(기본은 이 스킬이 싣고 있는 것, 저장소가 설정으로 자기 템플릿을 지정할 수 있다 — `SKILL.md`의 템플릿 폴더 설명 참고). **checklist는 Specify(2)에서 worktree를 만들 때 복사해 생성**하고, 설계 문서(plan·architecture·data-model 등)는 통째로 복사하지 않고 Design(5)에서 필요한 것만 꺼내 만든다. 실제 spec 인스턴스는 작업 중 git에 추적되지 않는다(아래 `.gitignore` 참고).
 
 저장소의 루트 문서(ADR·규칙 문서 등)는 전역 베이스다.
 spec 문서가 이번 작업의 구체 결정, 루트 문서가 전역 원칙이다(충돌 시 spec 우선).
@@ -92,9 +94,9 @@ finalizer가 phase 완료 시 해당 phase status를 `completed`로 동기화한
 > index.json은 **phase 입력 명세서**다(steps 목차 + execution 설정). status만 finalize로 미루지 않고
 > 매 step recorder가 기록하는 이유는, 중단 후 재실행에서 완료 step을 건너뛰려면 디스크 정본이 필요하기 때문이다.
 
-### workflow-checklist.json (8-Stage 진행 + 실행 전 게이트)
+### workflow-checklist.json (Stage 진행 + 실행 전 게이트)
 
-`harness` workflow의 8-Stage 진행을 기록한다. **spec 레벨에 하나** 두며(`<spec>/workflow-checklist.json`, spec 폴더 바로 아래),
+`harness` workflow의 10개 Stage 진행을 기록한다. **spec 레벨에 하나** 두며(`<spec>/workflow-checklist.json`, spec 폴더 바로 아래),
 Specify(2)에서 worktree를 만들 때 템플릿 폴더에서 복사해 만든다. 항목 제목은 `SKILL.md`의 Workflow 제목과 정확히 일치해야 한다.
 
 ```json
@@ -102,28 +104,30 @@ Specify(2)에서 worktree를 만들 때 템플릿 폴더에서 복사해 만든�
   "workflow": "harness",
   "status": "drafting",
   "items": [
-    { "order": 1, "title": "Explore", "status": "completed" },
-    { "order": 2, "title": "Specify", "status": "completed" },
-    { "order": 3, "title": "Clarify", "status": "completed" },
-    { "order": 4, "title": "Plan + Tasks", "status": "completed" },
-    { "order": 5, "title": "Analyze", "status": "completed" },
-    { "order": 6, "title": "Execution", "status": "pending" },
-    { "order": 7, "title": "PR Review", "status": "pending" },
-    { "order": 8, "title": "Root Sync", "status": "pending" }
+    { "order": 1, "group": "명세", "title": "Interview", "status": "completed" },
+    { "order": 2, "group": "명세", "title": "Specify", "status": "completed" },
+    { "order": 3, "group": "명세", "title": "Clarify", "status": "completed" },
+    { "order": 4, "group": "명세", "title": "Scenarios", "status": "completed" },
+    { "order": 5, "group": "명세", "title": "Design", "status": "completed" },
+    { "order": 6, "group": "변환·검증", "title": "Tasks", "status": "completed" },
+    { "order": 7, "group": "변환·검증", "title": "Analyze", "status": "completed" },
+    { "order": 8, "group": "실행", "title": "Execution", "status": "pending" },
+    { "order": 9, "group": "실행", "title": "PR Review", "status": "pending" },
+    { "order": 10, "group": "실행", "title": "Root Sync", "status": "pending" }
   ]
 }
 ```
 
-**실행 전 게이트**: `preflight`가 이 파일을 검사한다. **Execution(6) 직전 단계(1~5)가 모두 `completed`이고 Stage 6이
+**실행 전 게이트**: `preflight`가 이 파일을 검사한다. **Execution(8) 직전 단계(1~7)가 모두 `completed`이고 Stage 8이
 `pending`/`in_progress`가 아니면 preflight가 거부**하여(`{"ok": false, ...}`) workflow가 기동되지 않는다.
 즉 탐색·논의·설계·문서작성을 건너뛰고 곧바로 구현에 돌입하는 것을 기계적으로 막는다.
 
 필드 규칙:
 - `workflow`: 항상 `harness`
-- `items`: `SKILL.md`의 1~8번 Stage 순서·제목을 그대로 사용(order/title 일치 필수).
-- Stage 1~5는 진행하며 작성·갱신한다(Analyze까지 `completed`).
-- `Execution`(6)은 **메인이 Stage 6 자동 흐름으로 갱신**한다 — 진입 시 `set-stage … in_progress`, phase 루프를 다 돈 뒤 `set-stage … completed`를 자동 호출(spec 단위 1회씩). `PR Review`(7)·`Root Sync`(8)은 리뷰 결과·승격 완료를 사람이 확인한 시점에 `set-stage`로 갱신한다. preflight·finalize는 phase 단위라 이 Stage들을 건드리지 않는다(기계가 spec 레벨 Stage를 자기 판단으로 바꾸지 않는다).
-- 단 8은 7이 `completed`된 뒤에만 갱신한다(리뷰 코멘트 부재를 7 완료로 보지 않는다). Stage 8이 마지막이며, 이후 merge는 사람이 수동으로 한다.
+- `items`: `SKILL.md`의 1~10번 Stage 순서·제목을 그대로 사용(order/title 일치 필수). `group`은 표시용이며 검증 대상이 아니다.
+- Stage 1~7은 진행하며 작성·갱신한다(Analyze까지 `completed`).
+- `Execution`(8)은 **메인이 Stage 8 자동 흐름으로 갱신**한다 — 진입 시 `set-stage … in_progress`, phase 루프를 다 돈 뒤 `set-stage … completed`를 자동 호출(spec 단위 1회씩). `PR Review`(9)·`Root Sync`(10)은 리뷰 결과·승격 완료를 사람이 확인한 시점에 `set-stage`로 갱신한다. preflight·finalize는 phase 단위라 이 Stage들을 건드리지 않는다(기계가 spec 레벨 Stage를 자기 판단으로 바꾸지 않는다).
+- 단 10은 9가 `completed`된 뒤에만 갱신한다(리뷰 코멘트 부재를 9 완료로 보지 않는다). Stage 10이 마지막이며, 이후 merge는 사람이 수동으로 한다.
 - 이 파일은 로컬 추적용이다(spec 폴더 전체가 `.gitignore` — 6장 참고).
 
 ---

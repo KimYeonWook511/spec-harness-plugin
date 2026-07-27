@@ -2,13 +2,15 @@
   "workflow": "harness",
   "status": "drafting",
   "items": [
-    { "order": 1, "title": "Explore", "status": "pending" },
-    { "order": 2, "title": "Specify", "status": "pending" },
-    { "order": 3, "title": "Clarify", "status": "pending" },
-    { "order": 4, "title": "Plan + Tasks", "status": "pending" },
-    { "order": 5, "title": "Analyze", "status": "pending" },
-    { "order": 6, "title": "Execution", "status": "pending" },
-    { "order": 7, "title": "PR Review", "status": "pending" },
-    { "order": 8, "title": "Root Sync", "status": "pending" }
+    { "order": 1, "group": "명세", "title": "Interview", "status": "pending" },
+    { "order": 2, "group": "명세", "title": "Specify", "status": "pending" },
+    { "order": 3, "group": "명세", "title": "Clarify", "status": "pending" },
+    { "order": 4, "group": "명세", "title": "Scenarios", "status": "pending" },
+    { "order": 5, "group": "명세", "title": "Design", "status": "pending" },
+    { "order": 6, "group": "변환·검증", "title": "Tasks", "status": "pending" },
+    { "order": 7, "group": "변환·검증", "title": "Analyze", "status": "pending" },
+    { "order": 8, "group": "실행", "title": "Execution", "status": "pending" },
+    { "order": 9, "group": "실행", "title": "PR Review", "status": "pending" },
+    { "order": 10, "group": "실행", "title": "Root Sync", "status": "pending" }
   ]
 }

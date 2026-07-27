@@ -73,7 +73,7 @@ reviewer가 위반 시 재작업을 요구한다.
 3. 기존 테스트를 깨뜨리지 마라.
 4. git add/commit/push/checkout은 실행하지 마라. 커밋은 spec-harness:committer가 처리한다.
 5. step 요구사항·Acceptance Criteria·spec 문서·root docs를 **실패 회피 목적으로 임의 수정하지 마라.**
-6. **저장소의 루트 상태 문서(API 계약·구조·스키마처럼 현재 상태를 기록하는 문서)를 실행 중 수정하지 마라.** 코드가 spec 설계와 달라지면 spec 폴더에 있는 같은 종류의 설계 문서를 as-built로 갱신한다. `spec.md`(요구·완료 기준)는 실행 중 편집하지 마라 — 요구 변경은 Clarify로 되돌아간다. 루트 승격은 Stage 8(Root Sync)이 한다.
+6. **저장소의 루트 상태 문서(API 계약·구조·스키마처럼 현재 상태를 기록하는 문서)를 실행 중 수정하지 마라.** 코드가 spec 설계와 달라지면 spec 폴더에 있는 같은 종류의 설계 문서를 실제 구현된 대로 갱신한다. `spec.md`(요구·완료 기준)는 실행 중 편집하지 마라 — 요구 변경은 Clarify로 되돌아간다. 루트 승격은 Stage 8(Root Sync)이 한다.
 
 ## ★ 상태 파일 계약 (반드시 지킬 것)
 

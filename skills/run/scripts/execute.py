@@ -9,11 +9,11 @@ JavaScript workflow(spec-harness:execute)로 옮겨갔고, execute.py는 **workf
 
 서브커맨드:
   preflight       phase index.json을 읽어 {steps, execution}을 workflow args(JSON)로 stdout 출력
-  build-context   현재 step의 developer 컨텍스트(CLAUDE.md·spec문서·컨벤션요약·이전step summary)를 조립해 출력
+  build-context   현재 step의 developer 컨텍스트(CLAUDE.md·spec문서·규칙문서·이전step summary)를 조립해 출력
   verify-ac       step의 Acceptance Criteria를 실행·판정(acceptance_check) → ac-output.json 누적 + 결과 JSON 출력
   record-step     phase index.json에 step.status/summary/completed_at 기록 (recorder agent 전용)
   reset-step      blocked/error step을 pending으로 되돌림 (사람이 원인을 고친 뒤 재개용)
-  set-stage       spec 레벨 checklist의 Stage 6/7/8 상태 갱신 (메인의 Execution 자동 흐름 + PR Review/Root Sync — preflight·finalize는 안 건드림)
+  set-stage       spec 레벨 checklist의 Stage 8/9/10 상태 갱신 (메인의 Execution 자동 흐름 + PR Review/Root Sync — preflight·finalize는 안 건드림)
   finalize        phase 닫기: 이 phase의 completed_at·spec index 동기화(워킹트리) + 선택적 push (finalizer agent 전용)
 
 설계 원칙:
@@ -63,42 +63,46 @@ def emit(payload: dict) -> None:
     sys.stdout.flush()
 
 
+# 세 묶음으로 읽는다: 명세(1~5, 사람 주도·끝에서 동결) → 변환·검증(6~7, 다시 만들어도 되는 산출물)
+# → 실행(8~10, 기계 구현 후 리뷰·루트 반영).
 _WORKFLOW_ITEMS = [
-    (1, "Explore"),
+    (1, "Interview"),
     (2, "Specify"),
     (3, "Clarify"),
-    (4, "Plan + Tasks"),
-    (5, "Analyze"),
-    (6, "Execution"),
-    (7, "PR Review"),
-    (8, "Root Sync"),
+    (4, "Scenarios"),
+    (5, "Design"),
+    (6, "Tasks"),
+    (7, "Analyze"),
+    (8, "Execution"),
+    (9, "PR Review"),
+    (10, "Root Sync"),
 ]
 # 단계 목록은 여러 곳에 동기화돼야 한다(이 리스트 / 템플릿의 workflow-checklist.json /
-# SKILL.md 상태표·각 ### 헤더 / phase-files.md 예시 / docs 요약본 mermaid / 아래 게이트 경계).
+# SKILL.md 상태표·각 ### 헤더 / phase-files.md 예시 / 아래 게이트 경계).
 # 항목 개수는 len()으로 동적 처리되지만, 게이트 경계 리터럴(EXECUTION_ORDER)은 별도이므로 함께 갱신해야 한다.
 
 # Execution 단계의 order. 이 앞(1..EXECUTION_ORDER-1)은 모두 completed여야 실행 게이트를 통과한다.
-# Worktree 생성은 Specify(2)에 흡수되었고, Execution은 6번이다.
-EXECUTION_ORDER = 6
+# 명세 묶음(Interview~Design)과 변환·검증 묶음(Tasks·Analyze)이 모두 끝나야 실행에 들어간다.
+EXECUTION_ORDER = 8
 
 
 def validate_workflow_checklist(checklist_dir: Path) -> dict:
     """실행 전 게이트: 문서 검토·실행 승인 완료 여부를 강제한다.
 
     checklist는 spec 레벨에 하나다(`<spec>/workflow-checklist.json`).
-    Execution(6) 직전 단계(1~5: Explore·Specify·Clarify·Plan+Tasks·Analyze)가
-    모두 completed이고 Execution(6)이 pending/in_progress여야 통과.
+    Execution(8) 직전 단계(1~7: Interview·Specify·Clarify·Scenarios·Design·Tasks·Analyze)가
+    모두 completed이고 Execution(8)이 pending/in_progress여야 통과.
     통과하면 {"ok": True}, 아니면 {"ok": False, "error": ...}를 반환한다.
     (게이트 미통과 시 preflight는 emit으로 알리고 종료한다.)
 
     참고: "Clarify 위험마커 0 + Analyze 통과"라는 의미 게이트는 별도 코드 검사가 아니라,
-    Clarify(3)·Analyze(5) 단계를 completed로 표시하는 행위가 그 조건의 충족을 뜻한다는 규약으로 강제한다
+    Clarify(3)·Analyze(7) 단계를 completed로 표시하는 행위가 그 조건의 충족을 뜻한다는 규약으로 강제한다
     (마커가 남았으면 Clarify를 completed로 두지 않고, Analyze가 실패하면 Analyze를 completed로 두지 않는다).
     """
     checklist_path = checklist_dir / "workflow-checklist.json"
     if not checklist_path.exists():
         return {"ok": False, "error": f"workflow-checklist.json 없음: {checklist_path}. "
-                "Stage 1~5(Explore~Analyze)를 마치고 실행 승인을 기록한 checklist를 만든 뒤 실행하라."}
+                "Stage 1~7(Interview~Analyze)을 마치고 실행 승인을 기록한 checklist를 만든 뒤 실행하라."}
 
     checklist = read_json(checklist_path)
     if checklist.get("workflow") != "harness":
@@ -135,8 +139,8 @@ def update_workflow_item(checklist_dir: Path, title: str, status: str) -> bool:
 
     checklist는 spec 레벨에 하나다(`<spec>/workflow-checklist.json`).
     preflight·finalize는 이 함수를 부르지 않는다(그들은 phase 단위라 spec 레벨 stage를 건드리면 안 됨).
-    Stage 6(Execution)은 메인이 자동 흐름으로 `set-stage`를 호출해 갱신한다(진입 시 in_progress,
-    phase 루프를 다 돈 뒤 completed). Stage 7/8(PR Review·Root Sync)은 사람 판단 시점에 `set-stage`로 갱신한다.
+    Stage 8(Execution)은 메인이 자동 흐름으로 `set-stage`를 호출해 갱신한다(진입 시 in_progress,
+    phase 루프를 다 돈 뒤 completed). Stage 9/10(PR Review·Root Sync)은 사람 판단 시점에 `set-stage`로 갱신한다.
     """
     checklist_path = checklist_dir / "workflow-checklist.json"
     if not checklist_path.exists():
@@ -208,7 +212,7 @@ def cmd_preflight(args) -> int:
         return 1
     index = read_json(p["phase_index"])
 
-    # 실행 전 게이트: Execution 직전 단계(1~5) 완료 + 실행 승인을 강제한다. 통과 못하면 여기서 멈춘다.
+    # 실행 전 게이트: Execution 직전 단계(1~7) 완료 + 실행 승인을 강제한다. 통과 못하면 여기서 멈춘다.
     gate = validate_workflow_checklist(p["spec_dir"])
     if not gate["ok"]:
         emit(gate)
@@ -216,7 +220,7 @@ def cmd_preflight(args) -> int:
 
     # 주의: checklist의 Execution(Stage 6) 상태는 여기서 갱신하지 않는다. checklist는 spec 레벨
     # 하나이고 preflight는 phase마다 돌므로, 여기서 in_progress로 바꾸면 phase가 여러 개일 때
-    # spec 전체 진행 상태가 흔들린다. Execution(6)은 메인이 자동 흐름(진입 시 in_progress,
+    # spec 전체 진행 상태가 흔들린다. Execution(8)은 메인이 자동 흐름(진입 시 in_progress,
     # phase 루프 후 completed)에서 set-stage로 갱신한다.
 
     # hook이 phase별 로그 디렉터리(<phase>/logs)를 찾도록 active-phase 마커를 남긴다.
@@ -401,9 +405,9 @@ def cmd_reset_step(args) -> int:
 def cmd_set_stage(args) -> int:
     """spec 레벨 checklist의 한 Stage 상태를 갱신한다.
 
-    checklist는 spec 레벨 하나이고 Stage 6/7/8은 spec 전체의 진행이므로, phase 단위로 도는
+    checklist는 spec 레벨 하나이고 Stage 8/9/10은 spec 전체의 진행이므로, phase 단위로 도는
     preflight·finalize가 아니라 이 명령으로 spec 단위에 한 번씩 갱신한다.
-      - Stage 6(Execution): 메인이 자동 흐름에서 호출한다 — 진입 시 in_progress, phase 루프를 다 돈 뒤 completed.
+      - Stage 8(Execution): 메인이 자동 흐름에서 호출한다 — 진입 시 in_progress, phase 루프를 다 돈 뒤 completed.
           set-stage <spec> Execution in_progress
           set-stage <spec> Execution completed
       - Stage 7/8(PR Review/Root Sync): 리뷰·승격 등 사람 판단 시점에 같은 방식으로 갱신한다.
@@ -426,7 +430,7 @@ def cmd_finalize(args) -> int:
     워킹트리 상태만 갱신하고, committer가 만든 코드 커밋을 원격으로 push한다.
 
     checklist의 Execution(Stage 6) 상태는 건드리지 않는다. checklist는 spec 레벨 하나이고
-    8-Stage는 spec 전체의 진행이므로, phase 하나가 끝났다고 Execution(6)을 completed로 만들면 안 된다
+    Stage 진행은 spec 전체의 것이므로, phase 하나가 끝났다고 Execution(8)을 completed로 만들면 안 된다
     (다른 phase가 남아 있을 수 있다). Execution completed는 모든 phase를 마친 뒤 메인이 자동 흐름에서 set-stage로 찍는다.
     push 의도는 index.execution.push에서 읽는다(인자 --no-push로도 강제 비활성 가능).
     """
