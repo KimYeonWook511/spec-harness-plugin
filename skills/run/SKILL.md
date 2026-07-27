@@ -45,7 +45,7 @@ developer→reviewer→committer→recorder 서브에이전트를 돌린 뒤 fin
 - 이 skill을 사용하는 작업에서는 `phases`가 준비된 이후의 기본 구현 경로를 수동 파일 수정이 아니라 `execute.py` 실행으로 본다.
 - 사용자가 명시적으로 `execute.py`를 쓰지 말라고 하지 않은 이상, agent가 직접 구현을 시작하면 안 된다.
 - `Implement the plan`은 자동으로 직접 구현을 뜻하지 않는다. `phases` 준비 여부와 실행 승인 여부를 먼저 확인해야 한다.
-- Workflow는 spec 레벨 `workflow-checklist.json`(spec 폴더 바로 아래) 하나로 8-Stage를 추적하며, 다음 Stage로 넘어가기 전 이전 Stage가 모두 `completed`여야 한다. 이 checklist는 Specify(2)에서 worktree를 만들 때 `_template/workflow-checklist.json`을 복사해 생성한다.
+- Workflow는 spec 레벨 `workflow-checklist.json`(spec 폴더 바로 아래) 하나로 8-Stage를 추적하며, 다음 Stage로 넘어가기 전 이전 Stage가 모두 `completed`여야 한다. 이 checklist는 Specify(2)에서 worktree를 만들 때 템플릿의 `workflow-checklist.json`을 복사해 생성한다.
 - `harness` 진행 상태를 사용자에게 보고할 때는 1~8번 Workflow 상태 표를 함께 보여준다.
 - `Analyze`(5) 통과 후에는 반드시 멈추고 작성된 문서 경로를 사용자에게 보고한 뒤 검토 응답을 기다린다. 바로 `execute.py` 실행 요청으로 넘어가지 않는다.
 - `execute.py` 실행 전 반드시 사용자에게 진행 의사를 확인하고, 사용자가 진행을 승인한 뒤에만 실행한다(가벼운 확인 — 별도 Plan Mode·`ExitPlanMode` 절차는 거치지 않는다). 자동 코드 검증은 없으므로 이 룰은 agent가 직접 지킨다.
@@ -128,13 +128,15 @@ spec 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 `CLAU
 2. **worktree 생성·이동**: **브랜치·worktree 생성 방식은 `docs/branch-conventions.md`의 "worktree로 브랜치 생성하기"를 그대로 따른다** — 브랜치 형식 `<type>/<name>`, worktree 디렉토리 `worktrees/<type>-<name>`, `develop` 기준 분기. 여기서 `<name>`은 위에서 정한 `<spec-name>`이다. (harness는 명령을 하드코딩하지 않고 컨벤션을 가리킨다.)
 
    worktree를 만든 뒤 그 안으로 이동하고, 이동 직후 `pwd`(또는 `git branch --show-current`)로 worktree 안인지 반드시 확인한다 — `branch-conventions.md`가 정한 `worktrees/<type>-<spec-name>` 경로 / `<type>/<spec-name>` 브랜치여야 한다. 이후 모든 문서 작성·`execute.py` 실행은 이 worktree 루트 기준이다.
-3. **스캐폴딩(checklist 생성)**: worktree 안에 `docs/specs/<spec-name>/` 폴더를 만들고, `docs/specs/_template/workflow-checklist.json`을 `docs/specs/<spec-name>/workflow-checklist.json`으로 복사한다. 이 시점에 8-Stage 진행 추적 checklist가 존재한다(실행 게이트가 이를 읽는다). **설계 문서(plan·architecture·data-model 등)는 지금 복사하지 않는다 — Plan(4)에서 필요한 것만 `_template`에서 꺼내 만든다.** `spec.md`도 아래에서 새로 만든다.
+3. **스캐폴딩(checklist 생성)**: worktree 안에 `docs/specs/<spec-name>/` 폴더를 만들고, 템플릿 폴더(`<TEMPLATE_DIR>` — 아래 참고)의 `workflow-checklist.json`을 `docs/specs/<spec-name>/workflow-checklist.json`으로 복사한다. 이 시점에 8-Stage 진행 추적 checklist가 존재한다(실행 게이트가 이를 읽는다). **설계 문서(plan·architecture·data-model 등)는 지금 복사하지 않는다 — Plan(4)에서 필요한 것만 템플릿 폴더에서 꺼내 만든다.** `spec.md`도 아래에서 새로 만든다.
 
 > worktree·checklist는 spec당 한 번만 만든다. 재실행이면 이미 있으므로 건너뛴다.
 
+> **템플릿 폴더 (`<TEMPLATE_DIR>`)**: 저장소 설정(`.spec-harness/config.json`)에 `template_dir`가 있고 그 경로가 실제로 있으면 그것을 쓰고, 없으면 이 스킬이 싣고 있는 `<SKILL_DIR>/templates/spec/`을 쓴다. 그래서 템플릿을 갖고 있지 않은 저장소에서도 바로 시작할 수 있고, 자기 문구로 다듬은 템플릿이 있는 저장소는 그것을 계속 쓴다.
+
 #### spec.md 초안 작성
 
-**핵심 방식: 초안을 먼저 뽑는다.** 길게 대화한 뒤 받아쓰는 게 아니라, 가진 입력으로 `spec.md` 템플릿(`_template/spec.md`)을 복사해 *지금* 채운다. 긴 질의응답은 이 단계가 아니라 Clarify(3)에서 일어난다. Specify의 목표는 "완성된 spec"이 아니라 **"빈칸이 마커·가정으로 드러난 초안"**이다.
+**핵심 방식: 초안을 먼저 뽑는다.** 길게 대화한 뒤 받아쓰는 게 아니라, 가진 입력으로 `spec.md` 템플릿(`<TEMPLATE_DIR>/spec.md`)을 복사해 *지금* 채운다. 긴 질의응답은 이 단계가 아니라 Clarify(3)에서 일어난다. Specify의 목표는 "완성된 spec"이 아니라 **"빈칸이 마커·가정으로 드러난 초안"**이다.
 
 #### 입력 (어디서 출발하나)
 

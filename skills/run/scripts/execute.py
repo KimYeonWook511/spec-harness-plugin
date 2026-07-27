@@ -34,6 +34,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 import acceptance_check
 import git_ops
+import instance_config
 import step_context
 
 
@@ -72,7 +73,7 @@ _WORKFLOW_ITEMS = [
     (7, "PR Review"),
     (8, "Root Sync"),
 ]
-# 단계 목록은 여러 곳에 동기화돼야 한다(이 리스트 / _template/workflow-checklist.json /
+# 단계 목록은 여러 곳에 동기화돼야 한다(이 리스트 / 템플릿의 workflow-checklist.json /
 # SKILL.md 상태표·각 ### 헤더 / phase-files.md 예시 / docs 요약본 mermaid / 아래 게이트 경계).
 # 항목 개수는 len()으로 동적 처리되지만, 게이트 경계 리터럴(EXECUTION_ORDER)은 별도이므로 함께 갱신해야 한다.
 
@@ -221,7 +222,7 @@ def cmd_preflight(args) -> int:
     # hook이 phase별 로그 디렉터리(<phase>/logs)를 찾도록 active-phase 마커를 남긴다.
     # (preflight가 이 마커를 쓰고, hook이 읽는다.)
     try:
-        marker_dir = p["root_path"] / ".harness"
+        marker_dir = p["root_path"] / instance_config.RUNTIME_RELPATH
         marker_dir.mkdir(parents=True, exist_ok=True)
         (marker_dir / "active-phase").write_text(p["phase_relpath"], encoding="utf-8")
     except OSError:

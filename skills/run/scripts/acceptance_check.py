@@ -20,7 +20,7 @@ from pathlib import Path
 
 # 명령줄 바로 앞 줄(또는 같은 줄 끝)에서 기대 exit code를 읽는 주석 형식:
 #   # expect: 1
-#   ./gradlew :pay:test            (명시 없음 → 기본 0)
+#   <검증 명령>                     (명시 없음 → 기본 0)
 _EXPECT_PATTERN = re.compile(r"#\s*expect\s*:\s*(\d+)\s*$", re.IGNORECASE)
 
 DEFAULT_EXPECT_EXIT = 0

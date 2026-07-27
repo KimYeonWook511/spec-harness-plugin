@@ -40,7 +40,7 @@ docs/specs/<spec>/                  # ── 작업 중 .gitignore (워킹트리
 > PR·Root Sync도 spec 단위이므로 phase마다 두지 않는다. phase가 여러 개여도 checklist는 하나이며, 각 phase는
 > 그 안의 step만 workflow로 실행한다. (phases 폴더는 Plan(4)에서 생기지만 checklist는 그보다 먼저 Specify(2)에서 만들어지므로 phases 밖 spec 루트에 둔다.)
 
-> `docs/specs/_template/`에 spec 문서 템플릿들과 `workflow-checklist.json` 골격을 둔다. **checklist는 Specify(2)에서 worktree를 만들 때 복사해 생성**하고, 설계 문서(plan·architecture·data-model 등)는 통째로 복사하지 않고 Plan(4)에서 필요한 것만 꺼내 만든다. `_template`만 git에 추적되고(아래 `.gitignore` 참고), 실제 spec 인스턴스는 작업 중 추적되지 않는다.
+> spec 문서 템플릿들과 `workflow-checklist.json` 골격은 템플릿 폴더에 있다(기본은 이 스킬이 싣고 있는 것, 저장소가 설정으로 자기 템플릿을 지정할 수 있다 — `SKILL.md`의 템플릿 폴더 설명 참고). **checklist는 Specify(2)에서 worktree를 만들 때 복사해 생성**하고, 설계 문서(plan·architecture·data-model 등)는 통째로 복사하지 않고 Plan(4)에서 필요한 것만 꺼내 만든다. 실제 spec 인스턴스는 작업 중 git에 추적되지 않는다(아래 `.gitignore` 참고).
 
 루트 문서(`docs/adr/`, `docs/logging-conventions.md`, `docs/commit-conventions.md` 등)는 전역 베이스다.
 spec 문서가 이번 작업의 구체 결정, 루트 문서가 전역 원칙이다(충돌 시 spec 우선).
@@ -95,7 +95,7 @@ finalizer가 phase 완료 시 해당 phase status를 `completed`로 동기화한
 ### workflow-checklist.json (8-Stage 진행 + 실행 전 게이트)
 
 `harness` workflow의 8-Stage 진행을 기록한다. **spec 레벨에 하나** 두며(`<spec>/workflow-checklist.json`, spec 폴더 바로 아래),
-Specify(2)에서 worktree를 만들 때 `_template`에서 복사해 만든다. 항목 제목은 `SKILL.md`의 Workflow 제목과 정확히 일치해야 한다.
+Specify(2)에서 worktree를 만들 때 템플릿 폴더에서 복사해 만든다. 항목 제목은 `SKILL.md`의 Workflow 제목과 정확히 일치해야 한다.
 
 ```json
 {

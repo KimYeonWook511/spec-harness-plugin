@@ -44,11 +44,11 @@ if [ -z "$TP" ] || [ ! -f "$TP" ]; then
 fi
 
 PHASE=""
-[ -f "$PROJ/.harness/active-phase" ] && PHASE="$(head -1 "$PROJ/.harness/active-phase" 2>/dev/null | tr -d '[:space:]')"
+[ -f "$PROJ/.spec-harness/run/active-phase" ] && PHASE="$(head -1 "$PROJ/.spec-harness/run/active-phase" 2>/dev/null | tr -d '[:space:]')"
 if [ -n "$PHASE" ]; then LOGDIR="$PROJ/$PHASE/logs"; else LOGDIR="${HARNESS_LOG_DIR:-logs}"; fi
 mkdir -p "$LOGDIR" 2>/dev/null
 
-STATE="$PROJ/.harness/logstate-$AID.json"
+STATE="$PROJ/.spec-harness/run/logstate-$AID.json"
 if [ -n "$TP" ] && [ -f "$TP" ]; then
   python3 "$SCRIPTS/transcript_formatter.py" \
     --input "$TP" --output "$LOGDIR/$ROLE.log" --role "$ROLE" --state "$STATE" --final >/dev/null 2>&1
