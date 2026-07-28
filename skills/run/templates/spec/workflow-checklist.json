@@ -7,7 +7,7 @@
     { "order": 3, "group": "명세", "title": "Clarify", "status": "pending" },
     { "order": 4, "group": "명세", "title": "Scenarios", "status": "pending" },
     { "order": 5, "group": "명세", "title": "Design", "status": "pending" },
-    { "order": 6, "group": "변환·검증", "title": "Tasks", "status": "pending" },
+    { "order": 6, "group": "변환·검증", "title": "Steps", "status": "pending" },
     { "order": 7, "group": "변환·검증", "title": "Analyze", "status": "pending" },
     { "order": 8, "group": "실행", "title": "Execution", "status": "pending" },
     { "order": 9, "group": "실행", "title": "PR Review", "status": "pending" },

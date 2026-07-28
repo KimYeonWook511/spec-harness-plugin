@@ -10,9 +10,6 @@ permissionMode: bypassPermissions
 phase의 **모든 step이 완료된 뒤 딱 한 번** 호출하며, **그 phase 하나를 닫는** 마무리를 수행한다.
 (workflow 한 번 기동 = phase 하나 완주. spec에 phase가 여러 개면 phase마다 너가 한 번씩 호출된다.)
 
-이 마무리(특히 git push)는 shell·git 작업이라 workflow 스크립트(JS)가 직접 못 한다.
-그래서 그 일을 너(agent)가 execute.py finalize 서브커맨드를 통해 대신 실행한다.
-
 ## 수행할 일
 
 프롬프트로 다음이 전달된다:
@@ -32,7 +29,7 @@ python3 <EXECUTE> finalize <PHASE_DIR> --no-push  # NO_PUSH가 true일 때
 - 상위 spec `phases/index.json`에서 이 phase status를 `completed`로 동기화 (워킹트리 상태)
 - index의 `execution.push`가 true이고 `--no-push`가 아니면 `git push -u origin <branch>` (committer가 만든 코드 커밋을 원격으로 올린다)
 
-> finalize는 spec 레벨 checklist(`workflow-checklist.json`)의 Stage 8(Execution) 상태를 **건드리지 않는다.** checklist는 spec 전체의 진행이라, phase 하나 닫혔다고 Execution을 completed로 만들면 안 된다(다른 phase가 남아 있을 수 있다). Execution의 in_progress/completed는 모든 phase 루프를 감싸는 메인의 Stage 8 자동 흐름이 `set-stage`로 1회씩 찍는다. 너는 phase 하나만 닫는다.
+> finalize는 spec 레벨 checklist를 건드리지 않는다. 너는 phase 하나만 닫는다.
 
 ## ★ 금지사항 (반드시 지킬 것)
 

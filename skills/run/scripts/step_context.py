@@ -6,12 +6,17 @@ from typing import Optional
 
 import instance_config
 
+# 구현 단계에 주입하는 spec 문서(있는 것만). step 문서의 `## 검증 대상`이 시나리오를 식별자로만
+# 가리키므로, scenarios.md·data-model.md가 빠지면 구현자가 그 식별자를 해석할 수 없다.
 SPEC_DOC_FILES = [
     "spec.md",
+    "plan.md",
     "architecture.md",
-    "adr.md",
-    "api-spec.md",
+    "data-model.md",
     "db-schema.md",
+    "api-spec.md",
+    "adr.md",
+    "scenarios.md",
 ]
 
 
@@ -103,7 +108,7 @@ def list_reference_docs(root_path: Path, config: dict) -> tuple[list[Path], list
 
 
 def list_spec_docs(spec_dir: Path) -> list[Path]:
-    """spec 폴더에서 기본 문서 5개 중 존재하는 문서만 순서대로 반환한다."""
+    """spec 폴더의 기본 문서 중 존재하는 것만 순서대로 반환한다."""
     docs: list[Path] = []
     for filename in SPEC_DOC_FILES:
         path = spec_dir / filename
@@ -113,12 +118,7 @@ def list_spec_docs(spec_dir: Path) -> list[Path]:
 
 
 def build_methodology_notice(config: dict) -> tuple[str, list[str]]:
-    """활성 방법론이 있으면 그 이름과 선언 파일 위치를 알리는 블록을 만든다.
-
-    선언 전문을 싣지 않는 이유: 구현 단계에서 필요한 규칙은 대개 저장소 규칙 문서에 이미 있고,
-    방법론 선언은 단계별 요구·검사 목록이라 매 step 컨텍스트에 넣을 값이 아니다. 다만 어떤 방식으로
-    일하는 저장소인지는 알아야 하므로 이름과 경로를 준다(필요하면 직접 열어 보게).
-    """
+    """활성 방법론의 이름과 선언 파일 위치를 알리는 블록을 만든다(선언 전문은 싣지 않는다)."""
     notes: list[str] = []
     raw = config.get("methodologies") or []
     if not isinstance(raw, list):
@@ -173,8 +173,6 @@ def load_step_documents(
         rel_path = doc.relative_to(root_path).as_posix()
         sections.append(f"## spec 문서 ({rel_path})\n\n{doc.read_text(encoding='utf-8')}")
 
-    # 활성 방법론을 알린다. 규칙 전문을 여기 싣지 않고 선언 파일 위치만 준다 — 구현에 필요한 규칙은
-    # 대개 저장소 규칙 문서가 이미 담고 있고, 매 step마다 방법론 선언 전문을 넣으면 낭비이기 때문이다.
     methodology_block, methodology_notes = build_methodology_notice(config)
     notes.extend(methodology_notes)
     if methodology_block:

@@ -71,7 +71,7 @@ _WORKFLOW_ITEMS = [
     (3, "Clarify"),
     (4, "Scenarios"),
     (5, "Design"),
-    (6, "Tasks"),
+    (6, "Steps"),
     (7, "Analyze"),
     (8, "Execution"),
     (9, "PR Review"),
@@ -82,7 +82,7 @@ _WORKFLOW_ITEMS = [
 # 항목 개수는 len()으로 동적 처리되지만, 게이트 경계 리터럴(EXECUTION_ORDER)은 별도이므로 함께 갱신해야 한다.
 
 # Execution 단계의 order. 이 앞(1..EXECUTION_ORDER-1)은 모두 completed여야 실행 게이트를 통과한다.
-# 명세 묶음(Interview~Design)과 변환·검증 묶음(Tasks·Analyze)이 모두 끝나야 실행에 들어간다.
+# 명세 묶음(Interview~Design)과 변환·검증 묶음(Steps·Analyze)이 모두 끝나야 실행에 들어간다.
 EXECUTION_ORDER = 8
 
 
@@ -90,7 +90,7 @@ def validate_workflow_checklist(checklist_dir: Path) -> dict:
     """실행 전 게이트: 문서 검토·실행 승인 완료 여부를 강제한다.
 
     checklist는 spec 레벨에 하나다(`<spec>/workflow-checklist.json`).
-    Execution(8) 직전 단계(1~7: Interview·Specify·Clarify·Scenarios·Design·Tasks·Analyze)가
+    Execution(8) 직전 단계(1~7: Interview·Specify·Clarify·Scenarios·Design·Steps·Analyze)가
     모두 completed이고 Execution(8)이 pending/in_progress여야 통과.
     통과하면 {"ok": True}, 아니면 {"ok": False, "error": ...}를 반환한다.
     (게이트 미통과 시 preflight는 emit으로 알리고 종료한다.)
@@ -137,10 +137,7 @@ def validate_workflow_checklist(checklist_dir: Path) -> dict:
 def update_workflow_item(checklist_dir: Path, title: str, status: str) -> bool:
     """workflow-checklist.json의 단일 항목 상태를 갱신한다. 파일/항목 없으면 False.
 
-    checklist는 spec 레벨에 하나다(`<spec>/workflow-checklist.json`).
-    preflight·finalize는 이 함수를 부르지 않는다(그들은 phase 단위라 spec 레벨 stage를 건드리면 안 됨).
-    Stage 8(Execution)은 메인이 자동 흐름으로 `set-stage`를 호출해 갱신한다(진입 시 in_progress,
-    phase 루프를 다 돈 뒤 completed). Stage 9/10(PR Review·Root Sync)은 사람 판단 시점에 `set-stage`로 갱신한다.
+    누가 어느 Stage를 갱신하는지는 cmd_set_stage를 본다.
     """
     checklist_path = checklist_dir / "workflow-checklist.json"
     if not checklist_path.exists():
@@ -212,16 +209,20 @@ def cmd_preflight(args) -> int:
         return 1
     index = read_json(p["phase_index"])
 
+    # phase가 현재 작업 트리 밖이면 거부한다. 그대로 두면 구현·검증·커밋이 의도하지 않은 트리에서 일어난다.
+    if not str(p["phase_dir"]).startswith(p["root"]):
+        emit({"ok": False, "error": f"phase 디렉터리가 현재 작업 트리 밖이다. "
+              f"phase_dir={p['phase_dir']} / 작업 트리={p['root']}. 의도한 worktree 안에서 실행하라."})
+        return 1
+
     # 실행 전 게이트: Execution 직전 단계(1~7) 완료 + 실행 승인을 강제한다. 통과 못하면 여기서 멈춘다.
     gate = validate_workflow_checklist(p["spec_dir"])
     if not gate["ok"]:
         emit(gate)
         return 1
 
-    # 주의: checklist의 Execution(Stage 6) 상태는 여기서 갱신하지 않는다. checklist는 spec 레벨
-    # 하나이고 preflight는 phase마다 돌므로, 여기서 in_progress로 바꾸면 phase가 여러 개일 때
-    # spec 전체 진행 상태가 흔들린다. Execution(8)은 메인이 자동 흐름(진입 시 in_progress,
-    # phase 루프 후 completed)에서 set-stage로 갱신한다.
+    # checklist의 Execution(8)은 여기서 갱신하지 않는다 — spec 레벨이라 phase마다 도는 preflight가
+    # 건드리면 phase가 여러 개일 때 어긋난다.
 
     # hook이 phase별 로그 디렉터리(<phase>/logs)를 찾도록 active-phase 마커를 남긴다.
     # (preflight가 이 마커를 쓰고, hook이 읽는다.)
@@ -229,6 +230,9 @@ def cmd_preflight(args) -> int:
         marker_dir = p["root_path"] / instance_config.RUNTIME_RELPATH
         marker_dir.mkdir(parents=True, exist_ok=True)
         (marker_dir / "active-phase").write_text(p["phase_relpath"], encoding="utf-8")
+        # 남은 logstate가 있으면 그 agent의 로그가 조용히 비어 버린다.
+        for stale in marker_dir.glob("logstate-*.json"):
+            stale.unlink(missing_ok=True)
     except OSError:
         pass  # 마커 실패는 치명적이지 않다(로그가 fallback 위치로 갈 뿐)
 
@@ -243,13 +247,12 @@ def cmd_preflight(args) -> int:
         "execute": str(Path(__file__).resolve()),
         "phase_dir": str(p["phase_dir"]),
         "phase_relpath": p["phase_relpath"],
-        "project": index.get("project", ""),
         "phase": index.get("phase", p["phase_name"]),
         "steps": steps,
         "execution": {
             "developer_model": execution.get("developer_model", "sonnet"),
             "reviewer_model": execution.get("reviewer_model", "opus"),
-            "committer_model": execution.get("commit_model", execution.get("committer_model", "haiku")),
+            "committer_model": execution.get("committer_model", "haiku"),
             "push": execution.get("push", True),
         },
     })
@@ -316,9 +319,15 @@ def cmd_verify_ac(args) -> int:
         attempt=args.attempt,
     )
     if result is None:
-        # AC 명령이 없는 step → 검사할 게 없으므로 통과로 본다.
-        emit({"ok": True, "step": n, "attempt": args.attempt, "passed": True, "results": [], "no_ac": True})
-        return 0
+        # 못 뽑은 것을 통과로 처리하면 헤더 오타 하나로 검증이 사라진다.
+        emit({
+            "ok": False,
+            "step": n,
+            "error": "AC 명령을 하나도 뽑지 못했다. 검증 없이 통과시키지 않는다.",
+            "hint": "step 문서에 `## Acceptance Criteria` 헤더(정확히 이 문자열)와 ```bash 또는 ```sh "
+                    "코드블록이 있는지 확인하라. 정말 검증할 것이 없는 step이면 명령을 한 줄 명시하라.",
+        })
+        return 1
 
     emit({
         "ok": True,
@@ -410,9 +419,15 @@ def cmd_set_stage(args) -> int:
       - Stage 8(Execution): 메인이 자동 흐름에서 호출한다 — 진입 시 in_progress, phase 루프를 다 돈 뒤 completed.
           set-stage <spec> Execution in_progress
           set-stage <spec> Execution completed
-      - Stage 7/8(PR Review/Root Sync): 리뷰·승격 등 사람 판단 시점에 같은 방식으로 갱신한다.
+      - Stage 9/10(PR Review/Root Sync): 리뷰·승격 등 사람 판단 시점에 같은 방식으로 갱신한다.
     """
     checklist_dir = Path(args.checklist_dir).resolve()
+    # Stage 1~7을 이 명령으로 찍으면 그 앞 게이트가 근거 없이 열린다.
+    allowed = {title for order, title in _WORKFLOW_ITEMS if order >= EXECUTION_ORDER}
+    if args.stage not in allowed:
+        emit({"ok": False, "error": f"set-stage로 갱신할 수 있는 Stage는 {sorted(allowed)}뿐이다. "
+              f"'{args.stage}'는 진행하며 작성·갱신하는 단계다."})
+        return 1
     matched = update_workflow_item(checklist_dir, args.stage, args.status)
     if not matched:
         emit({"ok": False, "error": f"checklist에서 '{args.stage}' 항목을 찾지 못했다(경로: {checklist_dir}). "
@@ -429,7 +444,7 @@ def cmd_finalize(args) -> int:
     spec 폴더(phase index 포함)는 .gitignore 대상이라 커밋하지 않는다 — 여기서는
     워킹트리 상태만 갱신하고, committer가 만든 코드 커밋을 원격으로 push한다.
 
-    checklist의 Execution(Stage 6) 상태는 건드리지 않는다. checklist는 spec 레벨 하나이고
+    checklist의 Execution(Stage 8) 상태는 건드리지 않는다. checklist는 spec 레벨 하나이고
     Stage 진행은 spec 전체의 것이므로, phase 하나가 끝났다고 Execution(8)을 completed로 만들면 안 된다
     (다른 phase가 남아 있을 수 있다). Execution completed는 모든 phase를 마친 뒤 메인이 자동 흐름에서 set-stage로 찍는다.
     push 의도는 index.execution.push에서 읽는다(인자 --no-push로도 강제 비활성 가능).

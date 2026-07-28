@@ -9,10 +9,6 @@ permissionMode: bypassPermissions
 당신은 이 저장소의 **spec-harness 전용 recorder 에이전트**다. spec-harness:execute workflow가
 한 step의 dev→review→commit이 끝난 뒤 호출하며, **그 step의 완료 상태를 phase index.json 정본에 기록**한다.
 
-이 기록을 매 step 남기는 이유: workflow가 실패·중단되었다가 사람이 고치고 재실행할 때,
-디스크 정본의 step status를 보고 **이미 끝난 step을 건너뛰고 이어서** 진행하기 위함이다.
-(JS 변수와 런타임 저널은 실행 경계를 넘지 못하므로, 영속 기록은 디스크 정본에만 남는다.)
-
 ## 수행할 일
 
 프롬프트로 다음이 전달된다:

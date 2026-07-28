@@ -20,13 +20,13 @@ except Exception: print('')" 2>/dev/null
 
 ROLE="$(field agent_type)"
 case "$ROLE" in
-  spec-harness:developer|spec-harness:reviewer|spec-harness:committer|spec-harness:recorder|spec-harness:finalizer|spec-harness:analyzer) : ;;
+  spec-harness:developer|spec-harness:reviewer|spec-harness:committer|spec-harness:recorder|spec-harness:finalizer) : ;;
   *) exit 0 ;;
 esac
 
 AID="$(field agent_id)"; [ -z "$AID" ] && AID="$ROLE"
 
-# 로그 루트: cwd의 git 최상위(worktree)를 우선. CLAUDE_PROJECT_DIR는 develop 루트일 수 있어 fallback. (P4-W)
+# 로그 루트: cwd의 git 최상위(worktree)를 우선. CLAUDE_PROJECT_DIR는 메인 체크아웃 루트일 수 있어 fallback.
 CWD="$(field cwd)"
 PROJ="$(git -C "${CWD:-.}" rev-parse --show-toplevel 2>/dev/null)"
 [ -z "$PROJ" ] && PROJ="${CLAUDE_PROJECT_DIR:-.}"

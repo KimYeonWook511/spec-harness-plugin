@@ -20,7 +20,7 @@ except Exception: print('')" 2>/dev/null
 
 ROLE="$(field agent_type)"
 case "$ROLE" in
-  spec-harness:developer|spec-harness:reviewer|spec-harness:committer|spec-harness:recorder|spec-harness:finalizer|spec-harness:analyzer) : ;;
+  spec-harness:developer|spec-harness:reviewer|spec-harness:committer|spec-harness:recorder|spec-harness:finalizer) : ;;
   *) exit 0 ;;
 esac
 
@@ -30,7 +30,7 @@ CWD="$(field cwd)"
 PROJ="$(git -C "${CWD:-.}" rev-parse --show-toplevel 2>/dev/null)"
 [ -z "$PROJ" ] && PROJ="${CLAUDE_PROJECT_DIR:-.}"
 
-# 1순위: payload가 직접 주는 agent_transcript_path (P2 손조립 제거)
+# 1순위: payload가 직접 주는 agent_transcript_path
 TP="$(field agent_transcript_path)"
 # fallback: 없으면 PostToolUse와 동일한 glob 탐색
 if [ -z "$TP" ] || [ ! -f "$TP" ]; then
@@ -53,5 +53,5 @@ if [ -n "$TP" ] && [ -f "$TP" ]; then
   python3 "$SCRIPTS/transcript_formatter.py" \
     --input "$TP" --output "$LOGDIR/$ROLE.log" --role "$ROLE" --state "$STATE" --final >/dev/null 2>&1
 fi
-# logstate는 여기서 지우지 않는다(emit-once·footer 가드 보존). 정리는 preflight가 init 시 한다.
+# logstate는 여기서 지우지 않는다(emit-once·footer 가드 보존). preflight가 phase 시작 시 정리한다.
 exit 0

@@ -13,13 +13,13 @@ requires_in_spec:
 
 # 이 방법론이 데려오는 전용 agent.
 # 파일은 플러그인의 agents/ 아래 둔다 — 플러그인은 agent를 조건부로 등록할 수 없어서, 등록은 항상 되고
-# "이 방법론이 켜졌을 때만 소환한다"는 활성 여부로 가른다(설정의 methodologies).
+# "이 방법론이 켜졌을 때만 호출한다"는 활성 여부로 나눈다(설정의 methodologies).
 agents:
   - name: domain-expert
     file: ../../agents/domain-expert.md
     invoke_as: spec-harness:domain-expert
     modes:
-      - consult   # Specify/Clarify/Plan에서 대화 상대로 모델을 함께 잡는다
+      - consult   # Specify/Clarify/Scenarios/Design에서 대화 상대로 모델을 함께 잡는다
       - review    # Analyze 게이트에서 설계를 검토하고 리포트한다
 
 # Analyze 단계에 더해지는 검사.
@@ -49,4 +49,4 @@ enforcement: instance-defined
 # 조합 제약 — 다른 방법론과 함께 켤 때 엔진이 검증한다
 requires: []
 conflicts_with: []
-min_engine_version: "0.1.0"
+min_engine_version: "1.5.0"

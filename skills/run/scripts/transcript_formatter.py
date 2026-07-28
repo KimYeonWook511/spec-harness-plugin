@@ -9,7 +9,7 @@ format_events 로직으로 포맷해 logs/<role>.log 에 쌓는다.
 이 과정 전체가 셸/파이썬이라 모델 토큰을 추가로 쓰지 않는다. (transcript 기록은 런타임이
 어차피 하는 일이고, 우리는 그 파일을 읽기만 한다.)
 
-모드는 증분(incremental) 단일 경로다:
+동작:
   - PostToolUse마다 새로 확정된 메시지만 증분 append. requestId/uuid dedup + hold-last +
     emit-once(상태파일)로 중복 없이 실시간 로깅.
   - --final(SubagentStop)이면 보류분까지 flush + 완료 박스. 상태파일 정리는 호출자(hook)가 한다.

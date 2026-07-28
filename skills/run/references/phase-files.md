@@ -30,9 +30,9 @@ SKILL.md의 흐름을 이해한 뒤, 구체 스펙이 필요할 때 이 문서�
 ├── workflow-checklist.json         # spec 레벨: Stage 진행 추적 + 실행 전 게이트(preflight가 검사)
 └── phases/
     ├── index.json                  # spec 레벨: phase 목록과 각 phase status
-    └── <phase>/                    # 예: 0-main, 1-domain, 2-api
+    └── <phase>/                    # 예: 1-main (단일) / 1-domain, 2-api (복수). 순번은 항상 1부터
         ├── index.json              # phase 레벨: steps(목차) + execution(설정) + step status
-        ├── step1.md                # step 문서 (구현 지시 + ## Acceptance Criteria)
+        ├── step1.md                # step 문서 (구현 지시 + ## 검증 대상 + ## Acceptance Criteria)
         ├── step2.md
         ├── step1-ac-output.json    # (실행 산출) AC 검증 결과 attempts 누적 — reviewer가 읽음
         └── logs/                   # (실행 산출) <role>.log 사람용 로그
@@ -40,9 +40,11 @@ SKILL.md의 흐름을 이해한 뒤, 구체 스펙이 필요할 때 이 문서�
 
 > checklist(`workflow-checklist.json`, spec 폴더 바로 아래)는 **spec 레벨에 하나**다. Stage 진행은 spec 전체의 것이고
 > PR·Root Sync도 spec 단위이므로 phase마다 두지 않는다. phase가 여러 개여도 checklist는 하나이며, 각 phase는
-> 그 안의 step만 workflow로 실행한다. (phases 폴더는 Tasks(6)에서 생기지만 checklist는 그보다 먼저 Specify(2)에서 만들어지므로 phases 밖 spec 루트에 둔다.)
+> 그 안의 step만 workflow로 실행한다. (phases 폴더는 Steps(6)에서 생기지만 checklist는 그보다 먼저 Specify(2)에서 만들어지므로 phases 밖 spec 루트에 둔다.)
 
-> spec 문서 템플릿들과 `workflow-checklist.json` 골격은 템플릿 폴더에 있다(기본은 이 스킬이 싣고 있는 것, 저장소가 설정으로 자기 템플릿을 지정할 수 있다 — `SKILL.md`의 템플릿 폴더 설명 참고). **checklist는 Specify(2)에서 worktree를 만들 때 복사해 생성**하고, 설계 문서(plan·architecture·data-model 등)는 통째로 복사하지 않고 Design(5)에서 필요한 것만 꺼내 만든다. 실제 spec 인스턴스는 작업 중 git에 추적되지 않는다(아래 `.gitignore` 참고).
+> step 문서·phase index 골격도 템플릿 폴더에 있다(`step.md`·`phase-index.json`). 기계가 헤더 문자열로 파싱하므로 이 둘은 템플릿에서 복사해 쓴다.
+
+> spec 문서 템플릿과 `workflow-checklist.json` 골격은 템플릿 폴더에 있다(`SKILL.md`의 템플릿 폴더 설명 참고). checklist는 Specify(2)에서, 설계 문서는 Design(5)에서 필요한 것만 만든다.
 
 저장소의 루트 문서(ADR·규칙 문서 등)는 전역 베이스다.
 spec 문서가 이번 작업의 구체 결정, 루트 문서가 전역 원칙이다(충돌 시 spec 우선).
@@ -63,7 +65,7 @@ spec 문서가 이번 작업의 구체 결정, 루트 문서가 전역 원칙이
     "developer_model": "sonnet",
     "reviewer_model": "opus",
     "committer_model": "haiku",
-    "push": false
+    "push": true
   },
   "created_at": "2026-06-16T...",
   "completed_at": null
@@ -76,6 +78,8 @@ spec 문서가 이번 작업의 구체 결정, 루트 문서가 전역 원칙이
   `execute.py reset-step <PHASE_DIR> --step N`으로 그 step을 pending으로 되돌려야 재실행 시 다시 잡힌다.
   (안 고친 채 재실행해 같은 실패를 반복하며 토큰을 낭비하지 않도록, reset을 명시적 신호로 요구한다.)
 - `execution`: agent별 모델과 push 여부. preflight가 이 값을 workflow 인자로 옮긴다.
+  `push`는 `true`로 기록한다 — Execution은 PR 오픈으로 끝나고 PR은 push된 브랜치에만 열 수 있다.
+  로컬에서만 돌려 볼 때는 index를 고치지 말고 finalize에 `--no-push`를 준다.
 - `completed_at`: finalize가 채운다.
 
 ### spec 레벨 (`phases/index.json`)
@@ -90,9 +94,6 @@ spec 문서가 이번 작업의 구체 결정, 루트 문서가 전역 원칙이
 ```
 
 finalizer가 phase 완료 시 해당 phase status를 `completed`로 동기화한다.
-
-> index.json은 **phase 입력 명세서**다(steps 목차 + execution 설정). status만 finalize로 미루지 않고
-> 매 step recorder가 기록하는 이유는, 중단 후 재실행에서 완료 step을 건너뛰려면 디스크 정본이 필요하기 때문이다.
 
 ### workflow-checklist.json (Stage 진행 + 실행 전 게이트)
 
@@ -109,7 +110,7 @@ Specify(2)에서 worktree를 만들 때 템플릿 폴더에서 복사해 만든�
     { "order": 3, "group": "명세", "title": "Clarify", "status": "completed" },
     { "order": 4, "group": "명세", "title": "Scenarios", "status": "completed" },
     { "order": 5, "group": "명세", "title": "Design", "status": "completed" },
-    { "order": 6, "group": "변환·검증", "title": "Tasks", "status": "completed" },
+    { "order": 6, "group": "변환·검증", "title": "Steps", "status": "completed" },
     { "order": 7, "group": "변환·검증", "title": "Analyze", "status": "completed" },
     { "order": 8, "group": "실행", "title": "Execution", "status": "pending" },
     { "order": 9, "group": "실행", "title": "PR Review", "status": "pending" },
@@ -134,7 +135,31 @@ Specify(2)에서 worktree를 만들 때 템플릿 폴더에서 복사해 만든�
 
 ## 3. step 문서와 Acceptance Criteria 스키마
 
-step 문서(`stepN.md`)는 자유 형식의 구현 지시 + `## Acceptance Criteria` 섹션으로 구성된다.
+step 문서(`stepN.md`)는 자유 형식의 구현 지시 + `## 검증 대상` + `## Acceptance Criteria` 섹션으로
+구성된다.
+
+### `## 검증 대상` (이 step이 무엇을 확인하나)
+
+이 step이 확인하는 **시나리오를 목록으로 밝히고, 각 시나리오가 나온 요구사항·완료 기준을 괄호로
+덧붙이는** 절이다. 없으면 어떤 요구가 어느 step에서 검증되는지 대조할 수 없고, 계약으로 표시한 것이
+조용히 빠진 것을 아무도 잡지 못한다.
+
+```markdown
+## 검증 대상
+- SCN-004 전날 23:59 예약 성공 (FR-003)
+- SCN-005 자정 정각 거절 (FR-003)
+- SCN-010 동시 100건에서 중복 0건 (SC-002)
+```
+
+- **`## 관련 문서`와 다르다** — 그쪽은 읽을 문서, 이 절은 확인할 대상이다. 한 절에 섞지 않는다.
+- 괄호 안의 요구는 시나리오 산출물에서 그대로 옮긴다. 어긋나면 시나리오 산출물이 맞다.
+- 시나리오에 식별자 서식이 없는 저장소라면 확인할 경우를 문장으로 적는다. 형식은 활성 방법론이 정한다.
+- **시나리오로 표현되지 않는 step**(순수 리팩터·마이그레이션 등)은 요구사항·완료 기준을 직접 적거나
+  "기존 동작 유지"를 명시한다. 비워 두지 않는다.
+- **여기 적은 식별자는 문서 안에만 둔다.** 코드·테스트 이름·주석에 옮기지 않는다 — spec은 작업 후
+  아카이브되고 코드만 남아 그 식별자가 나중 독자에게 의미를 잃는다.
+- reviewer가 이 목록을 짚어 대응하는 검증이 추가됐는지 본다. 대응은 테스트 케이스 단위이며, 파라미터화
+  테스트 하나가 여러 경우를 덮어도 된다.
 
 ### Acceptance Criteria 파싱 규칙 (verify-ac가 따르는 실제 규칙)
 
@@ -171,7 +196,7 @@ test -f src/.../<삭제됐어야 하는 파일>
 
 ### 동시성 정합 요구의 AC
 
-같은 자원을 동시에 만들거나 갱신하는 경합 수렴처럼 **동시 실행 시의 정합**을 요구하는 step은 AC에 **실제 경합을 재현하는 테스트**를 건다. 협력 객체를 대역으로 바꾼 단위·부분 테스트는 실제 트랜잭션·잠금 거동을 재현하지 못해 경합 버그를 놓치므로, 실제 저장소를 쓰고 병행 실행으로 경합을 일으키는 테스트를 AC 명령으로 두어야 하며 단위·부분 테스트만으로 통과시키지 않는다. 그 테스트를 어떻게 쓰는지는 이 저장소가 지정한 규칙 문서를 따른다.
+동시 실행 시의 정합을 요구하는 step은 실제 저장소를 쓰고 병행 실행으로 경합을 일으키는 테스트를 AC 명령으로 둔다. 대역으로 바꾼 단위·부분 테스트만으로 통과시키지 않는다. 테스트 작성 방식은 이 저장소가 지정한 규칙 문서를 따른다.
 
 ---
 
@@ -251,12 +276,17 @@ workflow(JS)는 각 agent의 반환 JSON으로 분기한다. agent는 **마지�
 
 ## 6. 실행 산출물 vs 정본
 
-**`<SPEC_ROOT>/<spec-name>/` 아래는 작업 중 `.gitignore` 대상이다** — spec 문서(spec·plan·architecture·data-model·db-schema·api-spec·adr), phase·step 파일, index·checklist, ac-output·logs를 포함해 작업 중에는 git에 추적되지 않는 **워킹트리 휘발 작업 공간**이다. 그래서 아래 표에는 "커밋 여부" 칸을 두지 않는다(작업 중 전부 커밋 안 함). git에 남는 것은 **spec 폴더 바깥의 코드**이며, 그 커밋은 step별 committer가 만든다. 단 **예외로 `<SPEC_ROOT>/_archive/`는 추적된다** — Stage 8(Root Sync)에서 spec 정본(spec·설계 문서·step 문서)을 `_archive/pr-<번호>-<spec명>/`로 복사해 같은 PR에 커밋한다(진행 상태·실행 부산물은 휘발로 남김). 보존 가치가 있는 결정·계약은 Stage 8에서 루트 문서로도 승격된다.
+**`<SPEC_ROOT>/<spec-name>/` 아래는 작업 중 `.gitignore` 대상이다.** 그래서 아래 표에 "커밋 여부" 칸이 없다. git에 남는 것은 spec 폴더 바깥의 코드 커밋(step별 committer)과, Root Sync(10)에서 `_archive/pr-<번호>-<spec명>/`로 복사되는 spec 정본이다(`_archive`만 추적 예외).
+
+- **휘발로 남기는 것**: `index.json`·`workflow-checklist.json`(진행 상태), `step<N>-ac-output.json`·`logs/`(실행 부산물).
+- **승격하는 것**: 그 밖의 모든 `.md` — `spec.md`·`plan.md`·`architecture.md`·`data-model.md`·`db-schema.md`·`api-spec.md`·`adr.md`·`scenarios.md`·`interview.md`·`research.md`·`step<N>.md` 중 작성된 것.
+
+보존 가치가 있는 결정·계약은 Root Sync에서 루트 문서로도 승격된다.
 
 | 파일 | 누가 쓰나 | 누가 읽나 |
 |---|---|---|
 | `phases/<phase>/index.json`, `phases/index.json` | recorder(step status) / finalizer(completed_at·spec index) | preflight·재실행 skip 판단 |
-| spec 문서 (spec·plan·architecture·data-model·db-schema·api-spec·adr) | developer/사람 | reviewer·Stage 8 승격 |
+| spec 문서 (spec·plan·architecture·data-model·db-schema·api-spec·adr·scenarios) | developer/사람 | reviewer·Root Sync 승격 |
 | `stepN-ac-output.json` | verify-ac(attempt마다 append) | reviewer(자기보고 대조) |
 | `logs/<role>.log` | 로깅 hook | 사람(사후 분석·디버깅) |
 

@@ -2,21 +2,30 @@ from __future__ import annotations
 
 """spec-harness Acceptance Criteria 검사·판정 모듈.
 
-이 모듈의 본질은 "실행"이 아니라 "기대값과 실제값을 비교해 통과를 판정"하는 것이다. 핵심 동작:
+핵심 동작:
   1. expectExit 비교: step 문서가 명령별 기대 exit code를 명시(`# expect: N`)할 수 있고,
      명시가 없으면 0이 기본값이다. → "이 파일이 없어야 한다"(exit 1 기대) 같은 역조건 AC를 표현 가능.
   2. 전 명령 실행: 첫 실패에서 멈추지 않고 모든 명령을 끝까지 돌려, 어떤 명령이 왜 깨졌는지
      전부 보고한다(developer가 한 번에 다 고치도록).
   3. attempts 누적: ac-output.json을 덮어쓰지 않고 시도별로 append 한다(감사·회고 재료).
-
-이 모듈은 LLM·claude 세션을 일절 생성하지 않는다. 순수 subprocess로 shell 명령을
-돌리고 결과를 비교할 뿐이다. (claude 세션을 띄우는 것은 별개의 agent 메커니즘이다.)
 """
 
 import json
 import re
 import subprocess
 from pathlib import Path
+
+# 명령 하나의 상한. 넘기면 그 명령을 실패로 기록하고 다음으로 넘어간다.
+COMMAND_TIMEOUT_SEC = 900
+# ac-output.json에 남길 출력 길이 상한(명령별, stdout·stderr 각각).
+OUTPUT_TAIL_CHARS = 8000
+
+
+def _tail(text: str) -> str:
+    """출력이 길면 뒤쪽만 남긴다 — 실패 원인은 대개 끝에 있다."""
+    if not text or len(text) <= OUTPUT_TAIL_CHARS:
+        return text or ""
+    return f"[앞부분 {len(text) - OUTPUT_TAIL_CHARS}자 생략]\n" + text[-OUTPUT_TAIL_CHARS:]
 
 # 명령줄 바로 앞 줄(또는 같은 줄 끝)에서 기대 exit code를 읽는 주석 형식:
 #   # expect: 1
@@ -98,21 +107,35 @@ def check(root: str, phase_dir: Path, write_json, step: dict, step_text: str, at
     for entry in commands:
         command = entry["command"]
         expect_exit = entry["expect_exit"]
-        completed = subprocess.run(
-            command,
-            cwd=root,
-            shell=True,
-            capture_output=True,
-            text=True,
-        )
-        ok = completed.returncode == expect_exit
+        timed_out = False
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=root,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=COMMAND_TIMEOUT_SEC,
+            )
+            actual_exit, out, err = completed.returncode, completed.stdout, completed.stderr
+        except subprocess.TimeoutExpired as exc:
+            # 타임아웃이 없으면 멈춘 통합 테스트 하나가 phase 전체를 세운다.
+            timed_out = True
+            actual_exit = None
+            out = exc.stdout.decode(errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+            err = exc.stderr.decode(errors="replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
+            err += f"\n[timeout] {COMMAND_TIMEOUT_SEC}초를 넘겨 중단했다."
+
+        ok = (not timed_out) and actual_exit == expect_exit
         results.append({
             "command": command,
             "expectExit": expect_exit,
-            "actualExit": completed.returncode,
+            "actualExit": actual_exit,
             "ok": ok,
-            "stdout": completed.stdout,
-            "stderr": completed.stderr,
+            "timedOut": timed_out,
+            # 전문을 싣지 않는다 — 빌드 로그가 수 MB면 developer 반환 JSON이 잘려 파싱이 깨진다.
+            "stdout": _tail(out),
+            "stderr": _tail(err),
         })
         if not ok:
             passed = False

@@ -1,8 +1,7 @@
 # API Spec: <spec-name>
 
 > 이 문서는 `plan.md`의 하위 문서로, 이번 spec이 추가·변경하는 API **변경분(delta)**이다.
-> 전체 API의 현재 진실은 루트 `docs/api-spec.md`이며, Stage 8(Root Sync)에서 그쪽을 현재 상태로 갱신한다(이번에 안 바뀐 부분은 보존).
-> 작업 종료 후 이 문서는 stale해질 수 있으며, 그대로 둔다(과거 변경 기록).
+> 전체 API의 현재 진실은 루트 `docs/api-spec.md`이며, Root Sync 단계에서 그쪽을 현재 상태로 갱신한다(이번에 안 바뀐 부분은 보존).
 
 ---
 

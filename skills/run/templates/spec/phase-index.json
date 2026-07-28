@@ -1,0 +1,14 @@
+{
+  "phase": "1-main",
+  "steps": [
+    { "step": 1, "name": "kebab-case-slug", "status": "pending", "summary": null }
+  ],
+  "execution": {
+    "developer_model": "sonnet",
+    "reviewer_model": "opus",
+    "committer_model": "haiku",
+    "push": true
+  },
+  "created_at": null,
+  "completed_at": null
+}

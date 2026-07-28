@@ -6,21 +6,7 @@ from __future__ import annotations
 저장소가 설정 파일로 직접 나열하고, 엔진은 그 목록만 따른다. 설정이 없으면 규칙 주입을
 생략하고 코어 흐름만 돈다(오류가 아니다).
 
-python 표준 라이브러리로 읽히도록 JSON을 쓴다(YAML은 외부 패키지가 필요해 실행 환경을
-전제하게 된다).
-
-설정 예:
-    {
-      "rule_docs": [
-        { "path": "docs/some-rules.md", "section": "## 핵심 원칙" },
-        "docs/another-rules.md"
-      ],
-      "reference_docs": ["docs/api-spec.md"]
-    }
-
-- rule_docs: 항상 주입하는 규칙 문서. 문자열이면 전문, 객체면 그 섹션만 주입한다.
-  섹션 문자열은 저장소가 공급한다 — 엔진은 특정 헤딩을 전제하지 않는다.
-- reference_docs: step 문서가 그 경로를 언급할 때만 주입하는 참고 문서.
+설정 형식과 각 키의 뜻은 README "저장소 설정" 절이 정본이다. 기본값은 아래 DEFAULTS를 본다.
 """
 
 import json
@@ -29,18 +15,14 @@ from typing import Optional
 
 CONFIG_RELPATH = ".spec-harness/config.json"
 
-# 실행 부산물(진행 마커·로그 증분 상태)이 쌓이는 곳. 설정과 같은 폴더 아래 두되 하위로 갈라
-# 놓는다 — 설정은 사람이 쓰고 커밋하지만 이쪽은 엔진이 자동 생성하는 휘발 데이터라
-# 저장소가 버전 관리에서 제외해야 한다(무시 규칙 한 줄로 끝나도록 하위 폴더로 모은다).
+# 실행 부산물(진행 마커·로그 증분 상태)이 쌓이는 곳. 휘발 데이터라 저장소가 무시한다.
 RUNTIME_RELPATH = ".spec-harness/run"
 
 # 엔진 기본값 — 저장소 고유값은 하나도 담지 않는다. 비어 있으면 그 기능을 생략한다.
 DEFAULTS: dict = {
     "rule_docs": [],
     "reference_docs": [],
-    # 커밋 메시지·커밋 단위 규칙 문서. rule_docs와 따로 두는 이유: rule_docs는 step마다 구현 컨텍스트로
-    # 주입되는데 커밋 규칙은 커밋할 때만 필요하고, 커밋 담당 agent는 문서를 탐색할 도구가 없어 경로를
-    # 명시로 받아야 한다.
+    # 커밋 시점에만 필요한 규칙 문서. 커밋 담당 agent가 경로를 명시로 받는다.
     "commit_rule_docs": [],
     # spec 문서 템플릿을 저장소가 자기 것으로 쓰고 싶을 때만 지정한다(저장소 루트 기준 상대경로).
     # 없으면 플러그인이 싣고 있는 기본 템플릿을 쓴다 — 템플릿이 없는 저장소에서도 시작할 수 있도록.
@@ -100,6 +82,7 @@ def load_config(root_path: Path) -> dict:
 
     path = config_path(root_path)
     if not path.exists():
+        config["_notes"].append(f"설정 파일이 없어 규칙 문서·방법론 없이 코어만 돈다 ({CONFIG_RELPATH}).")
         return config
 
     try:

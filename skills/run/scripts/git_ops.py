@@ -1,11 +1,6 @@
 from __future__ import annotations
 
-"""spec-harness git 조작 헬퍼.
-
-execute.py는 클래스가 아니라
-함수 기반 서브커맨드 모음이므로 root(str)를 직접 받는 형태로 조정한다.
-로직 자체는 단순하다.
-"""
+"""spec-harness git 조작 헬퍼."""
 
 import subprocess
 

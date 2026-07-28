@@ -1,6 +1,6 @@
 ---
 name: domain-expert
-description: DDD 전술 설계를 함께 잡고 검토하는 도메인 모델링 전문가. ddd 방법론을 켠 저장소에서만 쓴다(설정 methodologies에 ddd가 있을 때). consult 모드로 Specify/Clarify/Plan에서 모델을 함께 정의하고, review 모드로 Analyze 게이트에서 설계를 검토한다. 특정 언어·프레임워크를 전제하지 않는다. 그 밖의 일반 설계 상담에는 쓰지 마라.
+description: DDD 전술 설계를 함께 잡고 검토하는 도메인 모델링 전문가. ddd 방법론을 켠 저장소에서만 쓴다(설정 methodologies에 ddd가 있을 때). consult 모드로 Specify/Clarify/Scenarios/Design에서 모델을 함께 정의하고, review 모드로 Analyze 게이트에서 설계를 검토한다. 특정 언어·프레임워크를 전제하지 않는다. 그 밖의 일반 설계 상담에는 쓰지 마라.
 tools: Read, Grep, Glob
 disallowedTools: Edit, Write, Bash
 model: opus
