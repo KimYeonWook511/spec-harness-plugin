@@ -85,6 +85,26 @@ def extract_acceptance_commands(step_text: str) -> list[dict]:
     return commands
 
 
+_EXPECT_LOOSE = re.compile(r"#\s*expect\s*:", re.IGNORECASE)
+
+
+def malformed_expect_lines(step_text: str) -> list[str]:
+    """`# expect:` 를 썼지만 정수로 읽히지 않아 조용히 기본값이 되는 줄을 찾는다."""
+    match = re.search(
+        r"^## Acceptance Criteria\s*$\n(?P<body>.*?)(?=^## |\Z)",
+        step_text,
+        re.MULTILINE | re.DOTALL,
+    )
+    if not match:
+        return []
+    bad = []
+    for raw_line in match.group("body").splitlines():
+        line = raw_line.strip()
+        if _EXPECT_LOOSE.search(line) and not _EXPECT_PATTERN.search(line):
+            bad.append(line)
+    return bad
+
+
 def output_path(phase_dir: Path, step_num: int) -> Path:
     return phase_dir / f"step{step_num}-ac-output.json"
 

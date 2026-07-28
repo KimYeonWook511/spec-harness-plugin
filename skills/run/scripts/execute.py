@@ -15,6 +15,9 @@ JavaScript workflow(spec-harness:execute)로 옮겨갔고, execute.py는 **workf
   reset-step      blocked/error step을 pending으로 되돌림 (사람이 원인을 고친 뒤 재개용)
   set-stage       spec 레벨 checklist의 Stage 8/9/10 상태 갱신 (메인의 Execution 자동 흐름 + PR Review/Root Sync — preflight·finalize는 안 건드림)
   finalize        phase 닫기: 이 phase의 completed_at·spec index 동기화(워킹트리) + 선택적 push (finalizer agent 전용)
+  lint-steps      step 문서의 Acceptance Criteria 파싱 계약 검사 (실행하지 않고 형식만)
+  close-analyze   analysis.json의 CRITICAL 처리·step 형식을 확인하고 Analyze(7)를 닫음 + fingerprint 기록
+  ready-pr        Root Sync 완료와 _archive 승격 커밋을 확인한 뒤 draft PR을 ready로 전환
 
 설계 원칙:
   - 함수 기반: 셔틀 상태가 없고 각 서브커맨드가 한 번 실행되고 끝이므로 클래스가 불필요.
@@ -23,7 +26,9 @@ JavaScript workflow(spec-harness:execute)로 옮겨갔고, execute.py는 **workf
 """
 
 import argparse
+import hashlib
 import json
+import re
 import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -159,6 +164,52 @@ def update_workflow_item(checklist_dir: Path, title: str, status: str) -> bool:
     return matched
 
 
+# Analyze가 판정한 문서들. 실행 상태 파일(index.json·checklist)은 넣지 않는다 — 실행 중 바뀐다.
+_ANALYZED_DOCS = (
+    "spec.md", "plan.md", "scenarios.md", "architecture.md",
+    "data-model.md", "db-schema.md", "api-spec.md", "adr.md",
+)
+
+
+def analyzed_fingerprint(spec_dir: Path) -> dict:
+    """Analyze가 본 문서들의 내용 해시. 닫은 뒤 문서가 바뀌면 그 분석은 낡은 것이다."""
+    digest = {}
+    for name in _ANALYZED_DOCS:
+        path = spec_dir / name
+        if path.exists():
+            digest[name] = hashlib.sha256(path.read_bytes()).hexdigest()[:12]
+    for step in sorted((spec_dir / "phases").glob("*/step*.md")):
+        key = step.relative_to(spec_dir).as_posix()
+        digest[key] = hashlib.sha256(step.read_bytes()).hexdigest()[:12]
+    return digest
+
+
+def lint_step_docs(spec_dir: Path) -> list[dict]:
+    """step 문서가 AC 파싱 계약을 지키는지 본다. 명령을 실행하지는 않는다.
+
+    여기서 걸러내지 못하면 Execution에서 step마다 같은 실패를 반복한다.
+    """
+    problems: list[dict] = []
+    steps = sorted((spec_dir / "phases").glob("*/step*.md"))
+    if not steps:
+        return [{"step": "(없음)", "problems": ["step 문서를 하나도 찾지 못했다"]}]
+
+    for path in steps:
+        text = path.read_text(encoding="utf-8")
+        found: list[str] = []
+        if not re.search(r"^## Acceptance Criteria\s*$", text, re.MULTILINE):
+            found.append("`## Acceptance Criteria` 헤더가 없다 — 이 문자열이 정확해야 AC가 파싱된다")
+        elif not acceptance_check.extract_acceptance_commands(text):
+            found.append("Acceptance Criteria 안에 실행할 명령이 없다 — ```bash 블록을 찾지 못했다")
+        for line in acceptance_check.malformed_expect_lines(text):
+            found.append(f"`expect:` 값이 정수가 아니라 무시된다: {line}")
+        if not re.search(r"^## 검증 대상\s*$", text, re.MULTILINE):
+            found.append("`## 검증 대상` 절이 없다 — 이 step이 무엇을 확인하는지 대조할 근거가 없다")
+        if found:
+            problems.append({"step": path.relative_to(spec_dir).as_posix(), "problems": found})
+    return problems
+
+
 def resolve_paths(phase_dir_arg: str) -> dict:
     """phase 디렉터리 경로로부터 자주 쓰는 경로들을 계산한다.
 
@@ -198,6 +249,37 @@ def step_file_path(phase_dir: Path, n: int) -> Path:
 # ─────────────────────────────────────────────────────────────────────────────
 # preflight — index.json → workflow args
 # ─────────────────────────────────────────────────────────────────────────────
+def stale_analysis(p: dict) -> dict | None:
+    """Analyze를 닫은 뒤 문서가 바뀌었으면 그 사실을 낸다. 문제가 없으면 None.
+
+    첫 진입(모든 phase가 pending)일 때만 본다. 실행이 시작된 뒤에는 설계 문서를 as-built로
+    갱신하므로 달라지는 것이 정상이고, phase가 여러 개면 두 번째 preflight가 잘못 막힌다.
+    """
+    if p["spec_index"].exists():
+        phases = read_json(p["spec_index"]).get("phases", [])
+        if any(ph.get("status") not in (None, "pending") for ph in phases if isinstance(ph, dict)):
+            return None
+
+    analysis_path = p["spec_dir"] / "analysis.json"
+    if not analysis_path.exists():
+        return {"ok": False, "error": f"analysis.json이 없다: {analysis_path}. "
+                "Analyze(7)를 `close-analyze`로 닫은 뒤 실행하라."}
+    recorded = read_json(analysis_path).get("fingerprint")
+    if not isinstance(recorded, dict) or not recorded:
+        return {"ok": False, "error": "analysis.json에 fingerprint가 없다. "
+                "`close-analyze`로 Analyze를 닫아야 기록된다."}
+
+    current = analyzed_fingerprint(p["spec_dir"])
+    changed = sorted(
+        (set(recorded) ^ set(current))
+        | {k for k in set(recorded) & set(current) if recorded[k] != current[k]}
+    )
+    if changed:
+        return {"ok": False, "error": "Analyze를 닫은 뒤 문서가 바뀌어 그 분석은 낡았다. "
+                "다시 분석하고 `close-analyze`로 닫아라.", "changed": changed}
+    return None
+
+
 def cmd_preflight(args) -> int:
     """phase index.json을 읽어 workflow에 넘길 args(steps + execution)를 stdout JSON으로 출력.
 
@@ -223,6 +305,11 @@ def cmd_preflight(args) -> int:
 
     # checklist의 Execution(8)은 여기서 갱신하지 않는다 — spec 레벨이라 phase마다 도는 preflight가
     # 건드리면 phase가 여러 개일 때 어긋난다.
+
+    stale = stale_analysis(p)
+    if stale:
+        emit(stale)
+        return 1
 
     # hook이 phase별 로그 디렉터리(<phase>/logs)를 찾도록 active-phase 마커를 남긴다.
     # (preflight가 이 마커를 쓰고, hook이 읽는다.)
@@ -509,6 +596,157 @@ def _update_spec_index(p: dict, status: str) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# lint-steps · close-analyze — Analyze(7) 게이트
+# ─────────────────────────────────────────────────────────────────────────────
+def cmd_lint_steps(args) -> int:
+    """step 문서의 AC 파싱 계약을 실행 없이 검사한다."""
+    spec_dir = Path(args.spec_dir).resolve()
+    problems = lint_step_docs(spec_dir)
+    if problems:
+        emit({"ok": False, "error": "step 문서 형식이 어긋나 Execution에서 AC가 파싱되지 않는다.",
+              "problems": problems})
+        return 1
+    emit({"ok": True, "steps": len(sorted((spec_dir / "phases").glob("*/step*.md")))})
+    return 0
+
+
+def cmd_close_analyze(args) -> int:
+    """Analyze(7)를 닫는다.
+
+    CRITICAL은 **근거를 적은 반려만** 통과한다. `fixed`(고치기로 했다)는 의사일 뿐이라 막는다 —
+    실제로 해소됐는지는 다시 분석해 그 발견이 사라지는 것으로만 확인된다.
+    닫으면서 그 시점 문서의 fingerprint를 남겨, 이후 문서가 바뀌면 preflight가 낡은 분석을 잡는다.
+    """
+    spec_dir = Path(args.spec_dir).resolve()
+    if not (spec_dir / "workflow-checklist.json").exists():
+        emit({"ok": False, "error": f"workflow-checklist.json 없음: {spec_dir}. "
+              "spec_dir는 workflow-checklist.json이 있는 spec 루트여야 한다."})
+        return 1
+
+    analysis_path = spec_dir / "analysis.json"
+    if not analysis_path.exists():
+        emit({"ok": False, "error": f"analysis.json이 없다: {analysis_path}",
+              "hint": "검사관 리포트의 JSON 블록을 모아 analysis.json으로 저장한 뒤 다시 실행하라."})
+        return 1
+
+    analysis = read_json(analysis_path)
+    findings = analysis.get("findings")
+    if not isinstance(findings, list):
+        emit({"ok": False, "error": "analysis.json의 findings가 목록이 아니다."})
+        return 1
+
+    unresolved = []
+    for finding in findings:
+        if not isinstance(finding, dict) or finding.get("severity") != "CRITICAL":
+            continue
+        disposition = finding.get("disposition")
+        kind = disposition.get("kind") if isinstance(disposition, dict) else None
+        reason = str(disposition.get("reason") or "").strip() if isinstance(disposition, dict) else ""
+        if kind != "rejected" or not reason:
+            unresolved.append({"id": finding.get("id"), "summary": finding.get("summary"),
+                               "disposition": kind})
+    if unresolved:
+        emit({"ok": False, "error": "CRITICAL이 남아 Analyze를 닫을 수 없다. 근거를 적은 반려만 통과한다.",
+              "hint": "고쳤다면 다시 분석해 그 발견이 사라진 것을 확인하라.",
+              "unresolved": unresolved})
+        return 1
+
+    problems = lint_step_docs(spec_dir)
+    if problems:
+        emit({"ok": False, "error": "step 문서 형식이 어긋나 Analyze를 닫을 수 없다.",
+              "problems": problems})
+        return 1
+
+    analysis["closed_at"] = stamp()
+    analysis["fingerprint"] = analyzed_fingerprint(spec_dir)
+    write_json(analysis_path, analysis)
+
+    if not update_workflow_item(spec_dir, "Analyze", "completed"):
+        emit({"ok": False, "error": f"checklist에서 'Analyze' 항목을 찾지 못했다(경로: {spec_dir})."})
+        return 1
+    emit({"ok": True, "stage": "Analyze", "status": "completed",
+          "fingerprint_files": len(analysis["fingerprint"])})
+    return 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ready-pr — Root Sync 완료를 확인한 뒤 draft 해제
+# ─────────────────────────────────────────────────────────────────────────────
+def _lookup_pr(root: str, pr: int | None) -> tuple[int | None, bool | None, str]:
+    """PR 번호와 draft 여부를 조회한다. pr이 None이면 현재 브랜치의 PR을 찾는다."""
+    target = [str(pr)] if pr else []
+    r = git_ops.run_gh(root, "pr", "view", *target, "--json", "number,isDraft")
+    if r.returncode != 0:
+        return None, None, r.stderr.strip() or "gh pr view 실패"
+    try:
+        data = json.loads(r.stdout)
+    except json.JSONDecodeError:
+        return None, None, "gh pr view 출력을 파싱하지 못했다"
+    return data.get("number"), data.get("isDraft"), ""
+
+
+def cmd_ready_pr(args) -> int:
+    """Root Sync가 끝났음을 확인한 뒤 draft PR을 ready로 바꾼다.
+
+    draft를 벗는 유일한 경로다 — hook이 Bash의 `gh pr ready`를 막으므로 아래 확인을 지나지 않고
+    draft를 벗을 방법이 없다. 그중 핵심은 `_archive` 승격본이 커밋됐는지 확인하는 것이다.
+    spec 폴더는 .gitignore 대상이라, 승격을 건너뛴 채 머지되면 명세 기록이 통째로 사라진다.
+    """
+    spec_dir = Path(args.spec_dir).resolve()
+    checklist_path = spec_dir / "workflow-checklist.json"
+    if not checklist_path.exists():
+        emit({"ok": False, "error": f"workflow-checklist.json 없음: {checklist_path}. "
+              "spec_dir는 workflow-checklist.json이 있는 spec 루트여야 한다."})
+        return 1
+
+    items = read_json(checklist_path).get("items", [])
+    done = {it.get("title") for it in items if isinstance(it, dict) and it.get("status") == "completed"}
+    incomplete = [f"{order}. {title}" for order, title in _WORKFLOW_ITEMS if title not in done]
+    if incomplete:
+        emit({"ok": False, "error": "Root Sync(10)까지 끝나지 않아 draft를 벗길 수 없다.",
+              "incomplete": incomplete})
+        return 1
+
+    top = git_ops.run_git(str(Path.cwd()), "rev-parse", "--show-toplevel")
+    root = top.stdout.strip() if top.returncode == 0 and top.stdout.strip() else str(Path.cwd())
+
+    number, is_draft, err = _lookup_pr(root, args.pr)
+    if number is None:
+        emit({"ok": False, "error": f"PR을 찾지 못했다: {err}", "hint": "--pr <번호>로 직접 지정할 수 있다."})
+        return 1
+
+    # spec_dir의 부모가 곧 spec 루트이므로, _archive는 그 옆에 있다.
+    archived_spec = spec_dir.parent / "_archive" / f"pr-{number}-{spec_dir.name}" / "spec.md"
+    if not archived_spec.exists():
+        emit({"ok": False, "error": f"_archive 승격본이 없다: {archived_spec}",
+              "hint": "Root Sync의 `_archive` 승격을 먼저 수행하라."})
+        return 1
+
+    # staging이 아니라 HEAD를 본다 — 커밋되지 않은 사본은 PR에 올라가지 않는다.
+    try:
+        relpath = archived_spec.relative_to(Path(root)).as_posix()
+    except ValueError:
+        emit({"ok": False, "error": f"_archive 승격본이 저장소 밖에 있다: {archived_spec}"})
+        return 1
+    committed = git_ops.run_git(root, "cat-file", "-e", f"HEAD:{relpath}")
+    if committed.returncode != 0:
+        emit({"ok": False, "error": f"_archive 승격본이 커밋되지 않았다: {relpath}",
+              "hint": ".gitignore의 `_archive` 예외를 확인하고 이 사본을 커밋하라."})
+        return 1
+
+    if is_draft is False:
+        emit({"ok": True, "pr": number, "already_ready": True})
+        return 0
+
+    r = git_ops.run_gh(root, "pr", "ready", str(number))
+    if r.returncode != 0:
+        emit({"ok": False, "error": f"gh pr ready 실패: {r.stderr.strip()}"})
+        return 1
+    emit({"ok": True, "pr": number, "readied": True})
+    return 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # CLI
 # ─────────────────────────────────────────────────────────────────────────────
 def build_parser() -> argparse.ArgumentParser:
@@ -553,6 +791,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_fin.add_argument("phase_dir")
     p_fin.add_argument("--no-push", action="store_true")
     p_fin.set_defaults(func=cmd_finalize)
+
+    p_lint = sub.add_parser("lint-steps", help="step 문서의 AC 파싱 계약 검사(실행하지 않음)")
+    p_lint.add_argument("spec_dir", help="spec 디렉터리(phases/가 있는 spec 루트)")
+    p_lint.set_defaults(func=cmd_lint_steps)
+
+    p_close = sub.add_parser("close-analyze", help="analysis.json을 확인하고 Analyze(7)를 completed로 닫음")
+    p_close.add_argument("spec_dir", help="spec 디렉터리(workflow-checklist.json이 있는 spec 루트)")
+    p_close.set_defaults(func=cmd_close_analyze)
+
+    p_ready = sub.add_parser("ready-pr", help="Root Sync 완료 확인 후 draft PR을 ready로 전환")
+    p_ready.add_argument("spec_dir", help="spec 디렉터리(workflow-checklist.json이 있는 spec 루트)")
+    p_ready.add_argument("--pr", type=int, default=None, help="PR 번호(생략하면 현재 브랜치의 PR)")
+    p_ready.set_defaults(func=cmd_ready_pr)
 
     return parser
 

@@ -41,7 +41,9 @@ description: 이 저장소에서 "harness로 spec 실행", "하네스로 이 pha
 | Scenarios(4) | 확인 방법 완비 | 확인 방법이 없는 기능 요구사항·완료 기준이 없다 | 메인 에이전트 |
 | Design(5) | 원칙 점검 | 위험영역이 모두 확정됐고, 규칙 문서를 위반하지 않는다 | 메인 에이전트 |
 | Design(5) | 동결 확인 | 동결된다는 사실을 알리고 사용자가 진행 의사를 밝혔다 | 사용자가 답해야 넘어간다 |
-| Analyze(7) | 정합성 | CRITICAL이 하나도 없다 | `analyzer`가 판정하고 메인 에이전트가 막는다 |
+| Analyze(7) | 정합성 | CRITICAL 중 근거를 적은 반려가 아닌 것이 없다 | 검사관 여섯이 판정하고 `close-analyze`가 막는다 |
+| Analyze(7) | step 형식 | 모든 step 문서에서 AC와 `## 검증 대상`이 파싱된다 | `close-analyze`가 파서로 판정하고 막는다 |
+| Execution(8) | 분석 최신 | Analyze를 닫은 뒤 판정 대상 문서가 바뀌지 않았다 | `preflight`가 내용 해시로 판정하고 막는다 |
 | Analyze(7) | 검토 후 중단 | 작성한 문서 경로를 보고하고 사용자의 검토 응답을 받았다. "진행해"는 승인이 아니다 | 사용자가 답해야 넘어간다 |
 | Execution(8) | 실행 승인 | 사용자가 실행을 승인했다 | 사용자가 답해야 넘어간다 |
 | Execution(8) | 실행 전 검사 | 1~7이 모두 `completed`이고 Stage 8이 `pending` 또는 `in_progress`다 | `preflight`가 판정하고 막는다 |
@@ -51,17 +53,23 @@ description: 이 저장소에서 "harness로 spec 실행", "하네스로 이 pha
 | Execution(8) | step 3회 시도 한도 | 한 step의 시도가 3회를 넘지 않는다(형식 오류·AC 미통과·재검토 요청을 합쳐 센다) | `execute.js`가 판정하고 막는다 |
 | Execution(8) | 중단된 step 재실행 | 그 step의 status가 `pending`이다 | `execute.js`가 판정하고 막는다 |
 | Root Sync(10) | 리뷰 완료 | Stage 9가 `completed`다. 리뷰 코멘트가 없다는 것은 완료를 뜻하지 않는다 | 사용자가 답해야 넘어간다 |
+| Root Sync(10) | draft 해제 | 1~10이 모두 `completed`이고 `_archive` 승격본이 커밋됐다 | `ready-pr`가 파일·git으로 판정하고 막는다 |
+| Root Sync(10) | 이른 머지 차단 | Root Sync가 안 끝난 spec이 있으면 Bash로 머지·draft 해제를 하지 못한다 | `merge-hook`이 판정하고 막는다 |
 
 표에 나온 이름:
 
 | 이름 | 무엇 |
 | --- | --- |
-| `preflight` · `verify-ac` | `<SKILL_DIR>/scripts/execute.py`의 서브커맨드. 명령을 실제로 실행해 그 결과로 판정한다 |
+| `preflight` · `verify-ac` · `close-analyze` · `ready-pr` | `<SKILL_DIR>/scripts/execute.py`의 서브커맨드. 파일·명령을 실제로 보고 판정한다 |
 | `execute.js` | `<PLUGIN_DIR>/workflows/execute.js`. step 실행을 조율하며 조건이 어긋나면 다음 단계를 부르지 않는다 |
-| `analyzer` · `reviewer` | 전용 에이전트 `spec-harness:analyzer`·`spec-harness:reviewer`. 둘 다 읽기 전용이라 판정만 하고 스스로 막지는 못한다 |
+| `merge-hook` | `<PLUGIN_DIR>/skills/run/scripts/hooks/block_early_merge.py`. PreToolUse로 Bash 명령을 보고 이른 머지를 거절한다 |
+| 검사관 여섯 | `spec-harness:analyzer-*`. Analyze의 관점별 전용 에이전트로, 읽기 전용이라 판정만 하고 스스로 막지 못한다 |
+| `reviewer` | 전용 에이전트 `spec-harness:reviewer`. 읽기 전용이라 판정만 한다 |
 | 메인 에이전트 | 이 skill을 실행하는 에이전트 |
 
-**모델 판단이 하나도 끼지 않는 게이트는 셋뿐이다** — 실행 전 검사, step 3회 시도 한도, 중단된 step 재실행. 이 셋은 스크립트가 자기 데이터(checklist·시도 횟수·step status)만 보고 판정한다.
+**모델 판단이 하나도 끼지 않는 게이트는 다섯이다** — 실행 전 검사, step 형식, 분석 최신, step 3회 시도 한도, 중단된 step 재실행. 이 다섯은 스크립트가 파일과 자기 데이터(checklist·문서 해시·파서 결과·시도 횟수·step status)만 보고 판정한다.
+
+Root Sync의 두 게이트는 스크립트와 hook이 막지만 통과 조건에 checklist 상태가 들어가고, 그것은 메인이 찍는다. 다만 `_archive` 승격본이 실제로 커밋됐는지는 git으로 확인하므로 **문서 승격을 건너뛴 채 draft를 벗기는 것은 막힌다.**
 
 나머지 열은 어딘가에 모델 판단이 들어간다. 특히 **AC 통과 게이트를 오해하지 마라.**
 
@@ -115,6 +123,7 @@ developer→reviewer→committer→recorder 서브에이전트를 돌린 뒤 fin
 - `harness` 진행 상태를 사용자에게 보고할 때는 1~10번 Workflow 상태 표를 함께 보여준다.
 - `Analyze`(7) 통과 후에는 반드시 멈추고 작성된 문서 경로를 사용자에게 보고한 뒤 검토 응답을 기다린다. 바로 `execute.py` 실행 요청으로 넘어가지 않는다.
 - `execute.py` 실행 전 반드시 사용자에게 진행 의사를 확인하고, 사용자가 진행을 승인한 뒤에만 실행한다(가벼운 확인 — 별도 Plan Mode·`ExitPlanMode` 절차는 거치지 않는다). 이 게이트는 스크립트가 막지 않으므로 메인 에이전트가 지킨다.
+- Stage 8(Execution)에서 PR은 **draft로 연다.** GitHub이 draft PR의 머지를 거부해, Root Sync(10) 전에 머지되어 루트 문서 갱신과 `_archive` 승격이 날아가는 것을 막는다. draft를 벗기는 것은 Root Sync 끝의 `ready-pr`뿐이다.
 - Stage 8(Execution)에서 PR을 연 뒤 메인 에이전트는 멈추고 사용자의 PR Review(9) 검토 완료 신호를 기다린다. "리뷰 코멘트가 아직 없음"은 PR Review 완료가 아니다. PR Review 완료가 확인되기 전에는 Root Sync(10)에 착수하지 않는다.
 - Stage 10(Root Sync)는 두 가지를 한다. (1) 루트 문서 갱신 — ADR=append, 스냅샷(architecture/db-schema/api-spec)=overwrite로 동작이 다르다. (2) `_archive` 승격 — spec 정본(진행 상태·실행 부산물을 뺀 모든 문서)을 `<SPEC_ROOT>/_archive/pr-<번호>-<spec명>/`로 복사해 같은 PR에 커밋한다(진행 상태·실행 부산물은 휘발로 남김). 한 지시로 뭉치지 않는다(아래 Stage 8 참고).
 
@@ -139,7 +148,7 @@ developer→reviewer→committer→recorder 서브에이전트를 돌린 뒤 fin
 
 상태 표는 `workflow-checklist.json`이 있으면 그 값을 기준으로 표시한다. checklist 생성 전에는 현재 대화에서 실제 완료한 Stage만 `✅`로 표시한다.
 
-`execute.py`는 checklist의 Stage 상태를 *자기 판단으로* 갱신하지 않는다(특히 phase 단위인 preflight·finalize는 spec 레벨 Stage를 건드리지 않는다). 대신 Stage 8(Execution)은 **메인이 자동 흐름으로** 갱신한다 — Stage 8 진입 시 `set-stage … in_progress`, phase 루프를 다 돈 뒤 `set-stage … completed`를 자동으로 호출한다(사람이 단계마다 지시하지 않는다). Stage 1~7은 진행하며 작성하고, Stage 9·10은 리뷰 결과·승격 완료 등 사람 판단이 필요한 시점에 `set-stage`로 갱신한다.
+`execute.py`는 checklist의 Stage 상태를 *자기 판단으로* 갱신하지 않는다(특히 phase 단위인 preflight·finalize는 spec 레벨 Stage를 건드리지 않는다). 대신 Stage 8(Execution)은 **메인이 자동 흐름으로** 갱신한다 — Stage 8 진입 시 `set-stage … in_progress`, phase 루프를 다 돈 뒤 `set-stage … completed`를 자동으로 호출한다(사람이 단계마다 지시하지 않는다). Stage 1~6은 진행하며 작성하고, Stage 7(Analyze)은 `close-analyze`가 검사한 뒤 닫는다. Stage 9·10은 리뷰 결과·승격 완료 등 사람 판단이 필요한 시점에 `set-stage`로 갱신한다.
 
 ---
 
@@ -203,8 +212,8 @@ spec 문서와 `phases` 문서로 부족한 공통 맥락이 있을 때만 설�
 | `agents` (`consult` 모드) | **Specify(2)·Clarify(3)·Scenarios(4)·Design(5)**: 설계 판단이 필요할 때 `invoke_as` 이름으로 `Task`를 띄워 함께 잡는다. |
 | `templates` | **Scenarios(4)·Design(5)**: `<PLUGIN_DIR>/methodologies/<이름>/templates/` 아래 템플릿을 그 spec의 시나리오·설계 문서로 쓸 수 있다. |
 | `requires_in_steps` | **Steps(6)**: 그 요구를 step 문서 본문에 **문장으로** 적는다. 구현하는 agent가 읽는 것은 step 문서이므로, 방법론 이름만 알려주면 구현 단계에서 지켜지지 않는다. Analyze(7)가 실제로 반영됐는지 확인한다. |
-| `adds_checks` | **Analyze(7)**: 코어 검출 패스에 그 검사들을 **추가**한다. analyzer에게 활성 방법론 이름을 함께 넘긴다. |
-| `agents` (`review` 모드) | **Analyze(7)**: analyzer와 별도로 그 agent를 띄워 방법론 관점 검토 리포트를 받는다. |
+| `adds_checks` | **Analyze(7)**: 검사관들의 검출 항목에 그 검사들을 **추가**한다. 각 검사관에게 활성 방법론 이름과 manifest 경로를 함께 넘기고, 각자 자기 관점에 해당하는 규칙만 적용한다. |
+| `agents` (`review` 모드) | **Analyze(7)**: 검사관 여섯과 별도로 그 agent를 띄워 방법론 관점 검토 리포트를 받는다. |
 
 **불변식 — 방법론은 자기 검사를 더할 수 있을 뿐, 코어 게이트를 끄지도 느슨하게 하지도 못한다.**
 특히 위험영역 확정, 실행 전 검사, AC 통과, 사람 승인 지점은 어떤 방법론도 무력화할 수 없다. manifest가
@@ -587,27 +596,68 @@ step 문서와 phase index는 템플릿 폴더의 `step.md`·`phase-index.json`�
 
 ### 7. Analyze
 
-구현 전, 작성된 문서들의 **교차 정합성**과 **원칙 위반**을 읽기 전용으로 점검하는 게이트다. spec ↔ plan ↔ 설계 문서 ↔ phase/step을 교차 검사해 불일치·중복·모호·미명세·커버리지 공백을 잡는다. context 오염을 막기 위해 **`spec-harness:analyzer` 에이전트를 `Task` 도구로 띄워** 돌린다(읽기 전용 배치라 상호작용이 없다 — Clarify와 반대). 이 단계는 워크플로(Stage 8 전용) 바깥이므로 **메인 에이전트가 직접** 그 에이전트를 호출한다.
+구현 전, 작성된 문서들을 읽기 전용으로 점검하는 게이트다. **관점이 다른 검사관 여섯을 `Task` 도구로 동시에 띄워** 각자의 전문성으로 판정받고, 메인 에이전트가 그 결과를 모아 사용자와 항목별로 처리한다. 이 단계는 워크플로(Stage 8 전용) 바깥이므로 메인이 직접 호출한다.
 
-> **활성 방법론이 있으면 Analyze는 두 갈래로 돈다.** (1) `spec-harness:analyzer`가 코어 검출 패스 + 각 manifest의 `adds_checks`를 돌린다(메인이 활성 방법론 이름을 프롬프트에 함께 넘긴다). (2) manifest의 `agents` 중 `review` 모드를 가진 agent를 **별도 `Task`로** 띄워 그 방법론 관점 검토 리포트를 받는다(예: ddd → `spec-harness:domain-expert`, 프롬프트에 `review 모드`와 spec 폴더 경로를 명시). 두 리포트를 사용자에게 나란히 보여준다. 활성 방법론이 없으면 (1)만 돈다.
+| 검사관 | 무엇을 보나 |
+| --- | --- |
+| `analyzer-traceability` | 요구 → 시나리오 → step 검증 대상 → AC 사슬이 끊긴 곳, 커버리지 표 |
+| `analyzer-domain` | 엔티티 식별·상태 전이, 위험영역 판별과 그 시나리오의 안정성 표시 |
+| `analyzer-concurrency` | 경합 수렴·멱등성·트랜잭션 경계·부분 실패 후 보상 |
+| `analyzer-access` | 누가 부를 수 있나, 신원을 무엇으로 확인하나, 남의 데이터가 보이는 경로 |
+| `analyzer-rules` | `rule_docs`가 정한 구조·의존 방향·예외 처리 위반, 핵심 산출물 누락 |
+| `analyzer-clarity` | 측정 기준 없는 요구, 미해소 표시, 용어 불일치, 중복·충돌 |
 
-> 메인은 `Task` 도구로 `spec-harness:analyzer`를 띄우며, spec 폴더 경로(`<SPEC_ROOT>/<spec-name>/`)를 프롬프트로 전달한다. 에이전트는 아래 입력을 읽어 검출 패스를 돌리고 **마크다운 리포트**를 반환한다. 메인은 그 리포트를 사용자에게 그대로 보여준다. 에이전트는 **절대 파일을 수정하지 않는다**(읽기 전용). 수정은 사용자 승인 후 사람이 한다. (별도 로그는 남기지 않는다 — 리포트가 곧 산출물이다.)
+**나눈 이유는 한 에이전트가 열 가지를 한 번에 보면 뒤쪽이 얕아지기 때문이다.** 그래서 각 발견 유형은 **정확히 한 검사관에게만** 배정한다 — 두 곳에 두면 규칙이 갈라진다. 공통 규칙(read-only·입력·심각도·반환 형식)은 `references/analysis-contract.md` 하나에 있다.
 
-#### 검사 내용은 `agents/analyzer.md`가 정본이다
+#### 호출
 
-입력 목록·검출 패스·심각도 기준·리포트 형식은 그 문서에만 둔다. 판정하는 것이 그 에이전트 하나뿐이라
-여기 사본을 두면 갈라진다(실제로 갈라졌던 적이 있다). 메인은 spec 폴더 경로와 활성 방법론 이름만 넘기고,
-돌아온 리포트를 그대로 사용자에게 보여준다.
+여섯을 한 번에 띄운다. 각 프롬프트에 아래를 넣는다.
+
+- spec 폴더 경로 `<SPEC_ROOT>/<spec-name>/`
+- 공통 계약 경로 `<PLUGIN_DIR>/skills/run/references/analysis-contract.md`
+- 활성 방법론 이름과 각 manifest 경로 (없으면 없다고 밝힌다)
+- 재분석이면 이전 `analysis.json` 경로
+
+활성 방법론의 `agents` 중 `review` 모드를 가진 것이 있으면 **일곱 번째로 함께 띄운다**(예: ddd → `spec-harness:domain-expert`). 그 리포트는 방법론 관점이라 위 여섯과 나란히 놓는다.
+
+#### 모으기 — `<SPEC_ROOT>/<spec-name>/analysis.json`
+
+검사관들은 읽기 전용이라 파일을 못 쓴다. 각자 리포트 끝에 JSON 블록을 내고, **메인이 그것들을 모아** `analysis.json`으로 저장한다. 스키마는 `references/phase-files.md`를 따른다.
+
+병합 규칙:
+
+- 같은 지점을 여럿이 지적했으면 하나로 합치고 `reported_by`에 검사관과 각자의 심각도를 함께 적는다. `severity`는 그중 가장 높은 것으로 둔다.
+- **심각도가 엇갈리면 그 사실을 지운 채 합치지 않는다.** 한쪽이 CRITICAL, 다른 쪽이 MEDIUM으로 본 것은 판단이 갈렸다는 뜻이고, 다관점 검사의 가치는 그 이견이 드러나는 데 있다. triage에서 사용자에게 양쪽을 보여준다.
+- 어느 검사관도 발견을 못 냈어도 그 검사관의 `not_applicable`은 남긴다 — 무엇을 보고 없다고 했는지가 근거다.
+
+#### triage — 항목별로 처리한다
+
+CRITICAL과 HIGH를 `AskUserQuestion`으로 처리한다(한 호출에 최대 4개씩 묶는다). MEDIUM·LOW는 기록만 남기고 묻지 않는다.
+
+| 선택 | 기록 | 뜻 |
+| --- | --- | --- |
+| 고친다 | `{"kind": "fixed"}` | 문서를 고치고 Analyze를 다시 돈다 |
+| 반려한다 | `{"kind": "rejected", "reason": "..."}` | 근거 없이는 기록하지 않는다 |
+| 자세히 본다 | 기록 없음 | 어떤 요구·시나리오가 어떻게 깨지는지 설명하고 다시 묻는다 |
+
+이견이 있는 항목은 선택지를 보여주기 전에 **누가 무엇을 다르게 봤는지** 먼저 알린다.
 
 #### 게이트·종료
 
-- **CRITICAL이 있으면** 구현 전 해소를 권고하고, 이 Stage를 `completed`로 두지 않는다(실행 게이트가 전제). 특히 원칙 위반은 spec·plan·step을 고쳐 해소하지, 원칙을 희석하지 않는다.
-- **LOW/MEDIUM만 있으면** 진행 가능하되 개선안을 제시한다.
+Analyze는 `set-stage`로 닫지 않는다. 아래 명령이 확인하고 닫는다.
+
+```bash
+python3 "<SKILL_DIR>/scripts/execute.py" close-analyze <SPEC_ROOT>/<spec-name>
+```
+
+- **CRITICAL은 근거를 적은 반려만 통과한다.** `fixed`는 막힌다 — "고치기로 했다"는 의사일 뿐이고, 해소는 **다시 분석해 그 발견이 사라지는 것**으로만 확인된다.
+- step 문서의 AC 파싱 계약(`## Acceptance Criteria` 헤더·명령 블록·`expect:` 값·`## 검증 대상`)이 어긋나면 닫지 않는다. 이것이 깨져 있으면 Execution에서 step마다 같은 실패를 반복한다.
+- 통과하면 그 시점 문서의 fingerprint를 `analysis.json`에 남긴다. 이후 문서가 바뀌면 preflight가 낡은 분석을 잡아 재분석을 요구한다.
 - 수정은 자동 적용하지 않는다 — 사용자가 어디로 되돌아갈지(Specify·Clarify·Design) 정해 사람이 고친다.
 
 #### Analyze 통과 후 필수 중단
 
-- 작성·수정한 spec 문서(`spec.md`·`plan.md`·`architecture.md`·`data-model.md`·`db-schema.md`·`api-spec.md`·`adr.md`), phase index, step 문서, `workflow-checklist.json` 경로를 사용자에게 보고한다.
+- 작성·수정한 spec 문서(`spec.md`·`plan.md`·`architecture.md`·`data-model.md`·`db-schema.md`·`api-spec.md`·`adr.md`), phase index, step 문서, `analysis.json`, `workflow-checklist.json` 경로를 사용자에게 보고한다.
 - 이 시점의 checklist는 `Interview`부터 `Analyze`까지(1~7)만 `completed`여야 하고, `Execution`(8) 이후는 `pending`이어야 한다.
 - 사용자의 단순한 "진행해", "계속해", "Implement the plan"은 문서 검토 완료 또는 실행 승인으로 해석하지 않는다.
 
@@ -736,7 +786,8 @@ phase 종료 시점에 finalizer(`execute.py finalize`)는 git 커밋을 만들�
 #### Stage 8 종료
 
 - Stage 8은 workflow로 phase의 step을 모두 완료하고, phase 끝에서 원격 push한 뒤 PR을 오픈하는 것으로 종료한다.
-- PR 오픈(`gh pr create`)은 메인 에이전트가 phase 루프 직후 수행한다. workflow는 구현·검증·커밋·push까지 책임지고, PR 오픈은 그 바깥이다.
+- PR 오픈(`gh pr create --draft`)은 메인 에이전트가 phase 루프 직후 수행한다. workflow는 구현·검증·커밋·push까지 책임지고, PR 오픈은 그 바깥이다.
+- draft로 여는 것은 Root Sync(10) 전 머지를 서버가 막게 하는 장치다. 저장소가 `.spec-harness/config.json`의 `pr.draft_until_root_sync`를 false로 두면 draft 없이 열되, 그때는 `merge-hook`이 agent의 Bash만 막아 사람의 수동 머지는 막히지 않는다.
 - 루트 docs 동기화는 Stage 8(Execution)에 포함하지 않는다. Stage 10(Root Sync)에서 수행한다.
 - 실행 중 코드가 spec 설계와 달라지면 **해당 spec 폴더의 설계 md(`architecture.md`·`api-spec.md`·`db-schema.md`)만 실제 구현된 대로 갱신**하고 루트 상태 문서는 건드리지 않는다. `spec.md`(요구·완료 기준)는 실행 중 편집하지 않는다 — 요구 변경은 Clarify로 되돌아간다. 루트 승격은 Root Sync(10)가 한다.
 - PR은 Stage 8에서 한 번만 오픈한다. PR Review(9)는 같은 브랜치·같은 PR에 커밋·push를 더 쌓을 뿐 PR을 새로 열지 않는다.
@@ -749,6 +800,8 @@ phase 종료 시점에 finalizer(`execute.py finalize`)는 git 커밋을 만들�
 Stage 8(Execution)에서 오픈한 PR에 달린 review를 처리한다.
 
 이 단계는 기본적으로 **사용자가 PR을 검토하는 단계**다. 메인 에이전트는 Execution(8)에서 PR을 연 뒤 멈추고 사용자의 검토 완료 신호를 기다린다(요청 시 agent가 검토·반영을 위임받을 수 있으나, 대부분 사용자 검토로 본다).
+
+PR은 draft 상태다. draft에서도 리뷰·코멘트·CI는 그대로 동작하고 머지만 잠긴다.
 
 **Stage 10(Root Sync) 진입 게이트** — 아래를 분명히 구분한다.
 
@@ -777,10 +830,22 @@ review 처리 방식:
 
 - **`_archive` 승격**: 작업 중 휘발 상태였던 spec 문서 중 **정본만** `<SPEC_ROOT>/_archive/pr-<PR번호>-<spec명>/`로 복사한다. PR 번호는 Stage 8(Execution)에서 PR을 열 때 이미 정해져 있다. `<SPEC_ROOT>/*`는 `.gitignore` 대상이지만 `_archive`는 예외라(`!<SPEC_ROOT>/_archive`), 이 사본만 git에 잡혀 같은 PR에 커밋된다.
   - **승격 제외(휘발로 남김)**: 진행 상태·실행 부산물 — `phases/index.json`, `phases/<phase>/index.json`, `workflow-checklist.json`, `step<N>-ac-output.json`, `logs/`.
-  - **승격 대상**: 그 밖의 **모든 `.md`**. 목록을 열거하지 않는 이유는, 열거하면 새 문서가 생길 때 조용히 빠지기 때문이다. 실제로는 `spec.md`·`plan.md`·`scenarios.md`·`data-model.md`·`architecture.md`·`db-schema.md`·`api-spec.md`·`adr.md`·`interview.md`·`research.md`와 `phases/<phase>/step<N>.md` 중 작성된 것이 해당한다.
+  - **승격 대상**: 그 밖의 **모든 `.md`**와 `analysis.json`. `.md` 목록을 열거하지 않는 이유는, 열거하면 새 문서가 생길 때 조용히 빠지기 때문이다. 실제로는 `spec.md`·`plan.md`·`scenarios.md`·`data-model.md`·`architecture.md`·`db-schema.md`·`api-spec.md`·`adr.md`·`interview.md`·`research.md`와 `phases/<phase>/step<N>.md` 중 작성된 것이 해당한다.
   - **`scenarios.md`·`data-model.md`를 빠뜨리면 안 된다** — 동결된 계약과 상태 전이 정본이다. spec 폴더는 작업 후 지워지므로, 승격하지 않으면 step 문서의 `## 검증 대상`이 가리키는 시나리오 식별자가 존재하지 않는 문서를 향하게 된다.
   - 복사만 한다. 내용을 재작성하지 않는다. 루트 ADR append는 위에서 이미 했으므로, `_archive`의 `adr.md`는 "이 spec이 그 결정에 어떻게 도달했나"의 맥락 사본이다.
 
 sync 후 agent는 변경 요약(루트 문서 중 무엇을 갱신·보존했는지, `_archive`로 무엇을 승격했는지)을 보고하고 사용자 검토를 받는다. 커밋·push는 Stage 8(Execution)에서 오픈한 같은 PR에 쌓는다(루트 문서 갱신 + `_archive` 사본이 함께 올라간다).
 
-Stage 10(Root Sync)이 spec-harness의 마지막 단계다. 이후 merge는 **사람이 수동으로** 수행한다 — agent는 어떤 경우에도 merge하지 않는다. 작업 회고·지식 축적이 필요하면 harness 바깥에서 별도로 처리한다(이 워크플로의 책임이 아니다).
+#### draft 해제 — 이 Stage의 마지막
+
+위 커밋·push가 끝나고 Root Sync를 `completed`로 찍은 뒤, draft를 벗긴다.
+
+```bash
+python3 "<SKILL_DIR>/scripts/execute.py" ready-pr <SPEC_ROOT>/<spec-name>
+```
+
+이 명령은 checklist 1~10이 모두 `completed`이고 `_archive/pr-<번호>-<spec명>/spec.md`가 HEAD에 커밋됐는지 확인한 뒤에만 `gh pr ready`를 부른다. staging만 한 상태는 통과하지 못한다 — 커밋되지 않은 사본은 PR에 올라가지 않는다. 어긋나면 무엇이 빠졌는지 낸다.
+
+`gh pr merge`·`gh pr ready`를 Bash로 직접 부르는 것은 `merge-hook`이 막는다. 승격을 건너뛴 채 draft를 벗길 경로를 없애기 위함이다.
+
+Stage 10(Root Sync)이 spec-harness의 마지막 단계다. draft가 벗겨진 뒤 merge는 **사람이 수동으로** 수행한다 — agent는 어떤 경우에도 merge하지 않는다. 작업 회고·지식 축적이 필요하면 harness 바깥에서 별도로 처리한다(이 워크플로의 책임이 아니다).

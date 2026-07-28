@@ -126,10 +126,55 @@ Specify(2)에서 worktree를 만들 때 템플릿 폴더에서 복사해 만든�
 필드 규칙:
 - `workflow`: 항상 `harness`
 - `items`: `SKILL.md`의 1~10번 Stage 순서·제목을 그대로 사용(order/title 일치 필수). `group`은 표시용이며 검증 대상이 아니다.
-- Stage 1~7은 진행하며 작성·갱신한다(Analyze까지 `completed`).
+- Stage 1~6은 진행하며 작성·갱신한다. Stage 7(Analyze)은 `close-analyze`만 `completed`로 만든다.
 - `Execution`(8)은 **메인이 Stage 8 자동 흐름으로 갱신**한다 — 진입 시 `set-stage … in_progress`, phase 루프를 다 돈 뒤 `set-stage … completed`를 자동 호출(spec 단위 1회씩). `PR Review`(9)·`Root Sync`(10)은 리뷰 결과·승격 완료를 사람이 확인한 시점에 `set-stage`로 갱신한다. preflight·finalize는 phase 단위라 이 Stage들을 건드리지 않는다(기계가 spec 레벨 Stage를 자기 판단으로 바꾸지 않는다).
 - 단 10은 9가 `completed`된 뒤에만 갱신한다(리뷰 코멘트 부재를 9 완료로 보지 않는다). Stage 10이 마지막이며, 이후 merge는 사람이 수동으로 한다.
 - 이 파일은 로컬 추적용이다(spec 폴더 전체가 `.gitignore` — 6장 참고).
+
+### analysis.json (Analyze 판정 + 항목별 처리)
+
+Analyze(7)의 검사관 여섯이 낸 JSON 블록을 메인이 모아 spec 레벨에 하나 둔다(`<spec>/analysis.json`).
+`close-analyze`가 이 파일을 보고 Stage 7을 닫고, `preflight`가 `fingerprint`로 분석이 낡았는지 본다.
+
+```json
+{
+  "generated_at": "2026-07-28T14:00:00+09:00",
+  "closed_at": null,
+  "inspectors": ["traceability", "domain", "concurrency", "access", "rules", "clarity"],
+  "findings": [
+    {
+      "id": "D1",
+      "category": "상태 전이",
+      "severity": "CRITICAL",
+      "location": "data-model.md",
+      "summary": "취소 상태에서 빠져나오는 전이가 없다",
+      "recommendation": "재예약이 새 건인지 같은 건의 복귀인지 확정한다",
+      "reported_by": [
+        { "inspector": "domain", "severity": "CRITICAL" },
+        { "inspector": "clarity", "severity": "MEDIUM" }
+      ],
+      "carried_disposition": null,
+      "disposition": null
+    }
+  ],
+  "not_applicable": {
+    "concurrency": ["단일 사용자 조회 흐름이라 경합 자원이 없다"]
+  },
+  "coverage": [
+    { "key": "FR-001", "scenarios": ["SCN-001"], "steps": ["step2"], "note": "" }
+  ],
+  "fingerprint": {}
+}
+```
+
+필드 규칙:
+- `severity`는 `reported_by` 중 **가장 높은 값**이다. 낮춰 적으면 게이트가 열린다.
+- `reported_by`의 심각도가 엇갈리면 그것이 검사관 간 이견이다. 합치면서 지우지 않는다.
+- `disposition`은 triage 결과다. `null`(미처리) / `{"kind":"fixed"}` / `{"kind":"rejected","reason":"..."}`.
+  **CRITICAL은 `reason`이 있는 `rejected`만 `close-analyze`를 통과한다.**
+- `carried_disposition`은 이전 분석에서 근거와 함께 반려된 항목을 다시 발견했을 때 그 근거를 옮긴 것이다.
+- `fingerprint`는 `close-analyze`가 쓴다 — 판정 대상 문서(`spec.md`·`plan.md`·`scenarios.md`·설계 md·`step<N>.md`)의 내용 해시. 진행 상태 파일은 넣지 않는다(실행 중 바뀐다).
+- `coverage`는 추적성 검사관만 채운다.
 
 ---
 
@@ -279,7 +324,7 @@ workflow(JS)는 각 agent의 반환 JSON으로 분기한다. agent는 **마지�
 **`<SPEC_ROOT>/<spec-name>/` 아래는 작업 중 `.gitignore` 대상이다.** 그래서 아래 표에 "커밋 여부" 칸이 없다. git에 남는 것은 spec 폴더 바깥의 코드 커밋(step별 committer)과, Root Sync(10)에서 `_archive/pr-<번호>-<spec명>/`로 복사되는 spec 정본이다(`_archive`만 추적 예외).
 
 - **휘발로 남기는 것**: `index.json`·`workflow-checklist.json`(진행 상태), `step<N>-ac-output.json`·`logs/`(실행 부산물).
-- **승격하는 것**: 그 밖의 모든 `.md` — `spec.md`·`plan.md`·`architecture.md`·`data-model.md`·`db-schema.md`·`api-spec.md`·`adr.md`·`scenarios.md`·`interview.md`·`research.md`·`step<N>.md` 중 작성된 것.
+- **승격하는 것**: 그 밖의 모든 `.md` — `spec.md`·`plan.md`·`architecture.md`·`data-model.md`·`db-schema.md`·`api-spec.md`·`adr.md`·`scenarios.md`·`interview.md`·`research.md`·`step<N>.md` 중 작성된 것. 그리고 `analysis.json` — 무엇을 발견하고 왜 그렇게 처리했는지를 나중에 되짚을 유일한 근거다.
 
 보존 가치가 있는 결정·계약은 Root Sync에서 루트 문서로도 승격된다.
 

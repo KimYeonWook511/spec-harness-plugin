@@ -32,6 +32,9 @@ DEFAULTS: dict = {
     # 이 저장소가 켠 방법론 이름 목록(예: ["ddd"]). 비어 있으면 방법론 무관 코어만 돈다.
     # 방법론은 검사·요구 산출물·전용 agent를 더하며, 코어 게이트를 끄지는 못한다.
     "methodologies": [],
+    # PR을 draft로 열어 Root Sync(10) 전 머지를 막을지. GitHub이 draft PR의 머지를 거부하므로
+    # 사람도 agent도 막힌다. draft PR을 건너뛰는 리뷰 봇을 쓰는 저장소만 false로 끈다.
+    "pr": {"draft_until_root_sync": True},
     # 작업 공간을 어떻게 만드는지. 저장소마다 브랜치 모델이 달라 값으로 받는다.
     "workspace": {
         # "worktree": 별도 디렉터리에 워크트리를 만들어 그 안에서 작업(메인 체크아웃을 건드리지 않음).
@@ -99,6 +102,15 @@ def load_config(root_path: Path) -> dict:
         if key in loaded:
             config[key] = loaded[key]
     return config
+
+
+def draft_until_root_sync(config: dict) -> bool:
+    """Root Sync 전까지 PR을 draft로 둘지. load_config는 최상위 키만 병합하므로,
+    저장소가 `pr`을 일부만 적어도 기본값이 살아 있게 개별 키로 읽는다."""
+    pr = config.get("pr")
+    if isinstance(pr, dict) and "draft_until_root_sync" in pr:
+        return bool(pr["draft_until_root_sync"])
+    return bool(DEFAULTS["pr"]["draft_until_root_sync"])
 
 
 def normalize_rule_docs(config: dict) -> tuple[list[tuple[str, Optional[str]]], list[str]]:
