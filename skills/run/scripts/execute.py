@@ -17,7 +17,6 @@ JavaScript workflow(spec-harness:execute)로 옮겨갔고, execute.py는 **workf
   finalize        phase 닫기: 이 phase의 completed_at·spec index 동기화(워킹트리) + 선택적 push (finalizer agent 전용)
   lint-steps      step 문서의 Acceptance Criteria 파싱 계약 검사 (실행하지 않고 형식만)
   close-analyze   analysis.json의 CRITICAL 처리·step 형식을 확인하고 Analyze(7)를 닫음 + fingerprint 기록
-  ready-pr        Root Sync 완료와 _archive 승격 커밋을 확인한 뒤 draft PR을 ready로 전환
 
 설계 원칙:
   - 함수 기반: 셔틀 상태가 없고 각 서브커맨드가 한 번 실행되고 끝이므로 클래스가 불필요.
@@ -670,83 +669,6 @@ def cmd_close_analyze(args) -> int:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ready-pr — Root Sync 완료를 확인한 뒤 draft 해제
-# ─────────────────────────────────────────────────────────────────────────────
-def _lookup_pr(root: str, pr: int | None) -> tuple[int | None, bool | None, str]:
-    """PR 번호와 draft 여부를 조회한다. pr이 None이면 현재 브랜치의 PR을 찾는다."""
-    target = [str(pr)] if pr else []
-    r = git_ops.run_gh(root, "pr", "view", *target, "--json", "number,isDraft")
-    if r.returncode != 0:
-        return None, None, r.stderr.strip() or "gh pr view 실패"
-    try:
-        data = json.loads(r.stdout)
-    except json.JSONDecodeError:
-        return None, None, "gh pr view 출력을 파싱하지 못했다"
-    return data.get("number"), data.get("isDraft"), ""
-
-
-def cmd_ready_pr(args) -> int:
-    """Root Sync가 끝났음을 확인한 뒤 draft PR을 ready로 바꾼다.
-
-    draft를 벗는 유일한 경로다 — hook이 Bash의 `gh pr ready`를 막으므로 아래 확인을 지나지 않고
-    draft를 벗을 방법이 없다. 그중 핵심은 `_archive` 승격본이 커밋됐는지 확인하는 것이다.
-    spec 폴더는 .gitignore 대상이라, 승격을 건너뛴 채 머지되면 명세 기록이 통째로 사라진다.
-    """
-    spec_dir = Path(args.spec_dir).resolve()
-    checklist_path = spec_dir / "workflow-checklist.json"
-    if not checklist_path.exists():
-        emit({"ok": False, "error": f"workflow-checklist.json 없음: {checklist_path}. "
-              "spec_dir는 workflow-checklist.json이 있는 spec 루트여야 한다."})
-        return 1
-
-    items = read_json(checklist_path).get("items", [])
-    done = {it.get("title") for it in items if isinstance(it, dict) and it.get("status") == "completed"}
-    incomplete = [f"{order}. {title}" for order, title in _WORKFLOW_ITEMS if title not in done]
-    if incomplete:
-        emit({"ok": False, "error": "Root Sync(10)까지 끝나지 않아 draft를 벗길 수 없다.",
-              "incomplete": incomplete})
-        return 1
-
-    top = git_ops.run_git(str(Path.cwd()), "rev-parse", "--show-toplevel")
-    root = top.stdout.strip() if top.returncode == 0 and top.stdout.strip() else str(Path.cwd())
-
-    number, is_draft, err = _lookup_pr(root, args.pr)
-    if number is None:
-        emit({"ok": False, "error": f"PR을 찾지 못했다: {err}", "hint": "--pr <번호>로 직접 지정할 수 있다."})
-        return 1
-
-    # spec_dir의 부모가 곧 spec 루트이므로, _archive는 그 옆에 있다.
-    archived_spec = spec_dir.parent / "_archive" / f"pr-{number}-{spec_dir.name}" / "spec.md"
-    if not archived_spec.exists():
-        emit({"ok": False, "error": f"_archive 승격본이 없다: {archived_spec}",
-              "hint": "Root Sync의 `_archive` 승격을 먼저 수행하라."})
-        return 1
-
-    # staging이 아니라 HEAD를 본다 — 커밋되지 않은 사본은 PR에 올라가지 않는다.
-    try:
-        relpath = archived_spec.relative_to(Path(root)).as_posix()
-    except ValueError:
-        emit({"ok": False, "error": f"_archive 승격본이 저장소 밖에 있다: {archived_spec}"})
-        return 1
-    committed = git_ops.run_git(root, "cat-file", "-e", f"HEAD:{relpath}")
-    if committed.returncode != 0:
-        emit({"ok": False, "error": f"_archive 승격본이 커밋되지 않았다: {relpath}",
-              "hint": ".gitignore의 `_archive` 예외를 확인하고 이 사본을 커밋하라."})
-        return 1
-
-    if is_draft is False:
-        emit({"ok": True, "pr": number, "already_ready": True})
-        return 0
-
-    r = git_ops.run_gh(root, "pr", "ready", str(number))
-    if r.returncode != 0:
-        emit({"ok": False, "error": f"gh pr ready 실패: {r.stderr.strip()}"})
-        return 1
-    emit({"ok": True, "pr": number, "readied": True})
-    return 0
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # CLI
 # ─────────────────────────────────────────────────────────────────────────────
 def build_parser() -> argparse.ArgumentParser:
@@ -799,11 +721,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_close = sub.add_parser("close-analyze", help="analysis.json을 확인하고 Analyze(7)를 completed로 닫음")
     p_close.add_argument("spec_dir", help="spec 디렉터리(workflow-checklist.json이 있는 spec 루트)")
     p_close.set_defaults(func=cmd_close_analyze)
-
-    p_ready = sub.add_parser("ready-pr", help="Root Sync 완료 확인 후 draft PR을 ready로 전환")
-    p_ready.add_argument("spec_dir", help="spec 디렉터리(workflow-checklist.json이 있는 spec 루트)")
-    p_ready.add_argument("--pr", type=int, default=None, help="PR 번호(생략하면 현재 브랜치의 PR)")
-    p_ready.set_defaults(func=cmd_ready_pr)
 
     return parser
 

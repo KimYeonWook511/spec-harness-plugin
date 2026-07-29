@@ -53,23 +53,22 @@ description: 이 저장소에서 "harness로 spec 실행", "하네스로 이 pha
 | Execution(8) | step 3회 시도 한도 | 한 step의 시도가 3회를 넘지 않는다(형식 오류·AC 미통과·재검토 요청을 합쳐 센다) | `execute.js`가 판정하고 막는다 |
 | Execution(8) | 중단된 step 재실행 | 그 step의 status가 `pending`이다 | `execute.js`가 판정하고 막는다 |
 | Root Sync(10) | 리뷰 완료 | Stage 9가 `completed`다. 리뷰 코멘트가 없다는 것은 완료를 뜻하지 않는다 | 사용자가 답해야 넘어간다 |
-| Root Sync(10) | draft 해제 | 1~10이 모두 `completed`이고 `_archive` 승격본이 커밋됐다 | `ready-pr`가 파일·git으로 판정하고 막는다 |
-| Root Sync(10) | 이른 머지 차단 | Root Sync가 안 끝난 spec이 있으면 Bash로 머지·draft 해제를 하지 못한다 | `merge-hook`이 판정하고 막는다 |
+| Root Sync(10) | 이른 머지 검사 | Root Sync가 `completed`이고 `_archive` 승격본이 HEAD에 커밋됐다 | `merge-hook`이 checklist와 git으로 판정한다. 거절할지 확인만 할지는 저장소 설정 `merge.agent`가 정한다 |
 
 표에 나온 이름:
 
 | 이름 | 무엇 |
 | --- | --- |
-| `preflight` · `verify-ac` · `close-analyze` · `ready-pr` | `<SKILL_DIR>/scripts/execute.py`의 서브커맨드. 파일·명령을 실제로 보고 판정한다 |
+| `preflight` · `verify-ac` · `close-analyze` | `<SKILL_DIR>/scripts/execute.py`의 서브커맨드. 파일·명령을 실제로 보고 판정한다 |
 | `execute.js` | `<PLUGIN_DIR>/workflows/execute.js`. step 실행을 조율하며 조건이 어긋나면 다음 단계를 부르지 않는다 |
-| `merge-hook` | `<PLUGIN_DIR>/skills/run/scripts/hooks/block_early_merge.py`. PreToolUse로 Bash 명령을 보고 이른 머지를 거절한다 |
+| `merge-hook` | `<PLUGIN_DIR>/skills/run/scripts/hooks/block_early_merge.py`. PreToolUse로 Bash 명령을 보고 이른 머지를 판정한다 |
 | 검사관 여섯 | `spec-harness:analyzer-*`. Analyze의 관점별 전용 에이전트로, 읽기 전용이라 판정만 하고 스스로 막지 못한다 |
 | `reviewer` | 전용 에이전트 `spec-harness:reviewer`. 읽기 전용이라 판정만 한다 |
 | 메인 에이전트 | 이 skill을 실행하는 에이전트 |
 
 **모델 판단이 하나도 끼지 않는 게이트는 다섯이다** — 실행 전 검사, step 형식, 분석 최신, step 3회 시도 한도, 중단된 step 재실행. 이 다섯은 스크립트가 파일과 자기 데이터(checklist·문서 해시·파서 결과·시도 횟수·step status)만 보고 판정한다.
 
-Root Sync의 두 게이트는 스크립트와 hook이 막지만 통과 조건에 checklist 상태가 들어가고, 그것은 메인이 찍는다. 다만 `_archive` 승격본이 실제로 커밋됐는지는 git으로 확인하므로 **문서 승격을 건너뛴 채 draft를 벗기는 것은 막힌다.**
+Root Sync의 게이트는 통과 조건에 checklist 상태가 들어가고, 그것은 메인이 찍는다. 다만 `_archive` 승격본이 실제로 커밋됐는지는 git으로 확인하므로 **문서 승격을 건너뛴 것은 드러난다.** 이 hook은 agent의 Bash 명령만 본다 — 사람이 GitHub 웹에서 머지 버튼을 누르는 것은 막지 못한다.
 
 나머지 열은 어딘가에 모델 판단이 들어간다. 특히 **AC 통과 게이트를 오해하지 마라.**
 
@@ -123,7 +122,7 @@ developer→reviewer→committer→recorder 서브에이전트를 돌린 뒤 fin
 - `harness` 진행 상태를 사용자에게 보고할 때는 1~10번 Workflow 상태 표를 함께 보여준다.
 - `Analyze`(7) 통과 후에는 반드시 멈추고 작성된 문서 경로를 사용자에게 보고한 뒤 검토 응답을 기다린다. 바로 `execute.py` 실행 요청으로 넘어가지 않는다.
 - `execute.py` 실행 전 반드시 사용자에게 진행 의사를 확인하고, 사용자가 진행을 승인한 뒤에만 실행한다(가벼운 확인 — 별도 Plan Mode·`ExitPlanMode` 절차는 거치지 않는다). 이 게이트는 스크립트가 막지 않으므로 메인 에이전트가 지킨다.
-- Stage 8(Execution)에서 PR은 **draft로 연다.** GitHub이 draft PR의 머지를 거부해, Root Sync(10) 전에 머지되어 루트 문서 갱신과 `_archive` 승격이 날아가는 것을 막는다. draft를 벗기는 것은 Root Sync 끝의 `ready-pr`뿐이다.
+- Stage 8(Execution)에서 연 PR은 **Root Sync(10)가 끝나기 전에 머지하지 않는다.** 먼저 머지되면 루트 문서 갱신과 `_archive` 승격이 날아간다.
 - Stage 8(Execution)에서 PR을 연 뒤 메인 에이전트는 멈추고 사용자의 PR Review(9) 검토 완료 신호를 기다린다. "리뷰 코멘트가 아직 없음"은 PR Review 완료가 아니다. PR Review 완료가 확인되기 전에는 Root Sync(10)에 착수하지 않는다.
 - Stage 10(Root Sync)는 두 가지를 한다. (1) 루트 문서 갱신 — ADR=append, 스냅샷(architecture/db-schema/api-spec)=overwrite로 동작이 다르다. (2) `_archive` 승격 — spec 정본(진행 상태·실행 부산물을 뺀 모든 문서)을 `<SPEC_ROOT>/_archive/pr-<번호>-<spec명>/`로 복사해 같은 PR에 커밋한다(진행 상태·실행 부산물은 휘발로 남김). 한 지시로 뭉치지 않는다(아래 Stage 8 참고).
 
@@ -786,8 +785,7 @@ phase 종료 시점에 finalizer(`execute.py finalize`)는 git 커밋을 만들�
 #### Stage 8 종료
 
 - Stage 8은 workflow로 phase의 step을 모두 완료하고, phase 끝에서 원격 push한 뒤 PR을 오픈하는 것으로 종료한다.
-- PR 오픈(`gh pr create --draft`)은 메인 에이전트가 phase 루프 직후 수행한다. workflow는 구현·검증·커밋·push까지 책임지고, PR 오픈은 그 바깥이다.
-- draft로 여는 것은 Root Sync(10) 전 머지를 서버가 막게 하는 장치다. 저장소가 `.spec-harness/config.json`의 `pr.draft_until_root_sync`를 false로 두면 draft 없이 열되, 그때는 `merge-hook`이 agent의 Bash만 막아 사람의 수동 머지는 막히지 않는다.
+- PR 오픈(`gh pr create`)은 메인 에이전트가 phase 루프 직후 수행한다. workflow는 구현·검증·커밋·push까지 책임지고, PR 오픈은 그 바깥이다.
 - 루트 docs 동기화는 Stage 8(Execution)에 포함하지 않는다. Stage 10(Root Sync)에서 수행한다.
 - 실행 중 코드가 spec 설계와 달라지면 **해당 spec 폴더의 설계 md(`architecture.md`·`api-spec.md`·`db-schema.md`)만 실제 구현된 대로 갱신**하고 루트 상태 문서는 건드리지 않는다. `spec.md`(요구·완료 기준)는 실행 중 편집하지 않는다 — 요구 변경은 Clarify로 되돌아간다. 루트 승격은 Root Sync(10)가 한다.
 - PR은 Stage 8에서 한 번만 오픈한다. PR Review(9)는 같은 브랜치·같은 PR에 커밋·push를 더 쌓을 뿐 PR을 새로 열지 않는다.
@@ -800,8 +798,6 @@ phase 종료 시점에 finalizer(`execute.py finalize`)는 git 커밋을 만들�
 Stage 8(Execution)에서 오픈한 PR에 달린 review를 처리한다.
 
 이 단계는 기본적으로 **사용자가 PR을 검토하는 단계**다. 메인 에이전트는 Execution(8)에서 PR을 연 뒤 멈추고 사용자의 검토 완료 신호를 기다린다(요청 시 agent가 검토·반영을 위임받을 수 있으나, 대부분 사용자 검토로 본다).
-
-PR은 draft 상태다. draft에서도 리뷰·코멘트·CI는 그대로 동작하고 머지만 잠긴다.
 
 **Stage 10(Root Sync) 진입 게이트** — 아래를 분명히 구분한다.
 
@@ -836,16 +832,10 @@ review 처리 방식:
 
 sync 후 agent는 변경 요약(루트 문서 중 무엇을 갱신·보존했는지, `_archive`로 무엇을 승격했는지)을 보고하고 사용자 검토를 받는다. 커밋·push는 Stage 8(Execution)에서 오픈한 같은 PR에 쌓는다(루트 문서 갱신 + `_archive` 사본이 함께 올라간다).
 
-#### draft 해제 — 이 Stage의 마지막
+#### 이 Stage의 마지막
 
-위 커밋·push가 끝나고 Root Sync를 `completed`로 찍은 뒤, draft를 벗긴다.
+위 커밋·push가 끝나면 Root Sync를 `completed`로 찍는다. Stage 10(Root Sync)이 spec-harness의 마지막 단계다.
 
-```bash
-python3 "<SKILL_DIR>/scripts/execute.py" ready-pr <SPEC_ROOT>/<spec-name>
-```
+**merge는 이 워크플로의 단계가 아니다** — 누가 어떤 형식으로 머지하는지는 저장소가 자기 규칙으로 정한다. agent가 Bash로 내는 머지 명령은 `merge-hook`이 가로채 판정한다(위 "게이트" 표).
 
-이 명령은 checklist 1~10이 모두 `completed`이고 `_archive/pr-<번호>-<spec명>/spec.md`가 HEAD에 커밋됐는지 확인한 뒤에만 `gh pr ready`를 부른다. staging만 한 상태는 통과하지 못한다 — 커밋되지 않은 사본은 PR에 올라가지 않는다. 어긋나면 무엇이 빠졌는지 낸다.
-
-`gh pr merge`·`gh pr ready`를 Bash로 직접 부르는 것은 `merge-hook`이 막는다. 승격을 건너뛴 채 draft를 벗길 경로를 없애기 위함이다.
-
-Stage 10(Root Sync)이 spec-harness의 마지막 단계다. draft가 벗겨진 뒤 merge는 **사람이 수동으로** 수행한다 — agent는 어떤 경우에도 merge하지 않는다. 작업 회고·지식 축적이 필요하면 harness 바깥에서 별도로 처리한다(이 워크플로의 책임이 아니다).
+작업 회고·지식 축적이 필요하면 harness 바깥에서 별도로 처리한다(이 워크플로의 책임이 아니다).

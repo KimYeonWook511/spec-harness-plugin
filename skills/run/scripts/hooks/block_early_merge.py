@@ -1,16 +1,26 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-"""PreToolUse — Root Sync(10)가 끝나기 전의 PR 머지·draft 해제를 막는다.
+"""PreToolUse — agent가 내는 PR 머지 명령을 Root Sync(10) 기준으로 판정한다.
 
-Stage 8이 PR을 draft로 열고, Root Sync가 끝난 뒤 `execute.py ready-pr`가 draft를 벗긴다.
-그 순서를 Bash에서 건너뛰는 경로를 이 hook이 닫는다. `ready-pr`는 스크립트 안에서 gh를 부르므로
-이 hook에 보이지 않아, 게이트를 확인하는 경로만 남는다.
+spec 폴더는 .gitignore 대상이라, 루트 문서 갱신과 `_archive` 승격이 커밋되기 전에 머지되면
+명세 기록이 통째로 사라진다. 그래서 checklist의 Root Sync 상태와 `_archive` 승격본의 실제 커밋
+여부를 함께 본다.
 
-Root Sync가 안 끝난 spec이 없으면 통과한다 — 하네스와 무관한 세션의 `gh pr merge`를 막지 않는다.
+무엇을 할지는 저장소가 `.spec-harness/config.json`의 `merge.agent`로 정한다. 이 설정의 소비자는
+이 hook뿐이다.
+
+  ask(기본)   Root Sync가 안 끝났으면 사용자에게 확인을 띄운다. 막지는 않는다.
+  root_sync   Root Sync가 안 끝났으면 거절한다.
+  deny        agent의 머지 명령을 무조건 거절한다.
+
+`ask`·`root_sync`는 검사할 spec이 없으면 그냥 통과한다 — 하네스를 쓰지 않는 저장소에는 읽을
+checklist가 없으므로 이 hook이 관여할 일이 없다.
 """
 
 import json
+import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -19,10 +29,13 @@ DEFAULT_SPEC_ROOT = "docs/specs"
 EXECUTION_TITLE = "Execution"
 ROOT_SYNC_TITLE = "Root Sync"
 
+DEFAULT_POLICY = "ask"
+POLICIES = {"ask", "root_sync", "deny"}
+
 
 def targets_merge(command: str) -> bool:
-    """공백을 정리한 명령이 PR 머지·draft 해제를 시도하는가."""
-    if "gh pr merge" in command or "gh pr ready" in command:
+    """공백을 정리한 명령이 PR 머지를 시도하는가."""
+    if "gh pr merge" in command:
         return True
     # gh api로 머지 엔드포인트를 직접 PUT하는 우회 경로.
     return "gh api" in command and "/merge" in command and (
@@ -38,20 +51,52 @@ def git_root(start: Path) -> Path | None:
     return None
 
 
-def spec_root(root: Path) -> Path:
+def read_settings(root: Path) -> tuple[Path, str]:
+    """저장소 설정에서 spec 루트와 머지 정책을 한 번에 읽는다. 없거나 깨졌으면 기본값."""
+    loaded = {}
     cfg = root / CONFIG_RELPATH
     if cfg.exists():
         try:
-            value = json.loads(cfg.read_text(encoding="utf-8")).get("spec_root")
+            parsed = json.loads(cfg.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            value = None
-        if isinstance(value, str) and value:
-            return root / value
-    return root / DEFAULT_SPEC_ROOT
+            parsed = None
+        if isinstance(parsed, dict):
+            loaded = parsed
+
+    value = loaded.get("spec_root")
+    specs_dir = root / value if isinstance(value, str) and value else root / DEFAULT_SPEC_ROOT
+
+    merge = loaded.get("merge")
+    policy = merge.get("agent") if isinstance(merge, dict) else None
+    return specs_dir, policy if policy in POLICIES else DEFAULT_POLICY
 
 
-def pending_specs(specs_dir: Path) -> list[str]:
-    """Execution이 시작됐고 Root Sync가 안 끝난 spec 이름 목록."""
+def archived_in_head(root: Path, specs_dir: Path, spec_name: str) -> bool:
+    """`_archive` 승격본이 HEAD에 커밋됐는가.
+
+    staging이 아니라 HEAD를 본다 — 커밋되지 않은 사본은 PR에 올라가지 않는다. 승격 폴더 이름에
+    들어가는 PR 번호를 hook은 모르므로 이름 패턴으로 찾는다.
+    """
+    try:
+        rel = (specs_dir / "_archive").relative_to(root).as_posix()
+    except ValueError:
+        return False
+    r = subprocess.run(
+        ["git", "ls-tree", "-r", "--name-only", "HEAD", "--", rel],
+        cwd=root, capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        return False
+    pattern = re.compile(rf"(?:^|/)pr-\d+-{re.escape(spec_name)}/spec\.md$")
+    return any(pattern.search(line) for line in r.stdout.splitlines())
+
+
+def pending_specs(root: Path, specs_dir: Path) -> list[str]:
+    """Root Sync가 남은 spec 목록.
+
+    checklist의 Root Sync 상태는 메인 에이전트가 찍는 값이라, 승격을 건너뛴 채 `completed`로
+    찍힐 수 있다. 그래서 상태가 찍힌 spec은 승격본이 실제로 커밋됐는지 git으로 한 번 더 본다.
+    """
     pending = []
     for checklist in sorted(specs_dir.glob("*/workflow-checklist.json")):
         try:
@@ -59,17 +104,21 @@ def pending_specs(specs_dir: Path) -> list[str]:
         except (OSError, json.JSONDecodeError):
             continue
         status = {it.get("title"): it.get("status") for it in items if isinstance(it, dict)}
-        if (status.get(EXECUTION_TITLE) in {"in_progress", "completed"}
-                and status.get(ROOT_SYNC_TITLE) != "completed"):
-            pending.append(checklist.parent.name)
+        if status.get(EXECUTION_TITLE) not in {"in_progress", "completed"}:
+            continue
+        name = checklist.parent.name
+        if status.get(ROOT_SYNC_TITLE) != "completed":
+            pending.append(name)
+        elif not archived_in_head(root, specs_dir, name):
+            pending.append(f"{name}(`_archive` 승격본이 커밋되지 않았다)")
     return pending
 
 
-def emit_block(reason: str) -> int:
+def emit(decision: str, reason: str) -> int:
     payload = {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
-            "permissionDecision": "deny",
+            "permissionDecision": decision,
             "permissionDecisionReason": reason,
         }
     }
@@ -99,17 +148,20 @@ def main() -> int:
     root = git_root(Path(payload.get("cwd") or Path.cwd()).resolve())
     if root is None:
         return 0
-    pending = pending_specs(spec_root(root))
+    specs_dir, policy = read_settings(root)
+
+    if policy == "deny":
+        return emit("deny", "이 저장소는 agent의 PR 머지를 허용하지 않는다"
+                            "(`.spec-harness/config.json`의 `merge.agent`가 `deny`). 사람이 직접 머지한다.")
+
+    pending = pending_specs(root, specs_dir)
     if not pending:
         return 0
 
-    return emit_block(
-        "Root Sync(10)가 끝나지 않은 spec이 있어 머지·draft 해제를 막았다: "
-        + ", ".join(pending)
-        + ". 루트 문서 동기화와 `_archive` 승격을 커밋한 뒤 "
-        "`execute.py ready-pr <spec 디렉터리>`로 draft를 벗겨라 — 그 스크립트가 승격본이 "
-        "커밋됐는지 확인한다."
-    )
+    found = "Root Sync(10)가 끝나지 않은 spec이 있다: " + ", ".join(pending) + "."
+    if policy == "root_sync":
+        return emit("deny", found + " 루트 문서 동기화와 `_archive` 승격을 커밋한 뒤 다시 시도하라.")
+    return emit("ask", found + " 지금 머지하면 루트 문서 갱신과 `_archive` 승격이 사라진다. 그래도 진행할까?")
 
 
 if __name__ == "__main__":

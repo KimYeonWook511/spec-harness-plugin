@@ -33,11 +33,10 @@ flowchart TD
     FZ --> S6["6️⃣ Steps<br>step 분해 + 검증 대상 + AC"]
     S6 --> S7["7️⃣ Analyze<br>검사관 6인 + 항목별 처리"]
     S7 --> CA{{"🚦 close-analyze<br>CRITICAL 해소 · step 형식"}}
-    CA --> S8["8️⃣ Execution<br>workflow 완주 → push → draft PR"]
-    S8 --> S9["9️⃣ PR Review<br>사람이 검토 (draft라 머지 잠김)"]
+    CA --> S8["8️⃣ Execution<br>workflow 완주 → push → PR"]
+    S8 --> S9["9️⃣ PR Review<br>사람이 검토"]
     S9 --> S10["🔟 Root Sync<br>루트 문서 갱신 + _archive 승격"]
-    S10 --> RP{{"🚦 ready-pr<br>승격본 커밋 확인 → draft 해제"}}
-    RP --> M["사람이 머지"]
+    S10 --> M["사람이 머지"]
 
     S4 -.모호함 발견.-> S3
     S5 -.기술 시나리오 보강.-> S4
@@ -74,8 +73,7 @@ flowchart TD
 | Execution(8) | reviewer 판정이 `approved`다 | `execute.js` |
 | Execution(8) | 한 step의 시도가 3회를 넘지 않는다 | 🔒 `execute.js` |
 | Execution(8) | 중단된 step은 `pending`으로 되돌려야 재개된다 | 🔒 `execute.js` |
-| **Root Sync(10)** | **`_archive` 승격본이 커밋됐다 → draft 해제** | 🔒 `ready-pr` |
-| **Root Sync(10)** | **Root Sync 전 머지·draft 해제 명령을 거절** | 🔒 PreToolUse hook |
+| **Root Sync(10)** | **Root Sync가 끝났고 `_archive` 승격본이 커밋됐다** | 🔒 PreToolUse hook (agent의 Bash 머지 한정) |
 
 🔒 표시는 **모델 판단이 끼지 않는** 게이트다. 스크립트가 파일·문서 해시·파서 결과·git 상태를 직접 보고 판정한다.
 
@@ -131,7 +129,7 @@ flowchart TD
 | 🔍 **검사관 6인** | `analyzer-traceability`·`-domain`·`-concurrency`·`-access`·`-rules`·`-clarity` |
 | 🤖 **실행 에이전트** | `developer`·`reviewer`·`committer`·`recorder`·`finalizer` |
 | 🧪 **`methodologies/`** | opt-in 방법론(`ddd`·`bdd`). manifest 하나로 자기 기여물을 밝힌다 |
-| 🪝 **hooks** | 진행 로그 기록 + 루트 동기화 전 머지 차단. 진행 중인 spec이 없으면 아무것도 막지 않는다 |
+| 🪝 **hooks** | 진행 로그 기록 + 루트 동기화 전 머지 검사. 진행 중인 spec이 없으면 아무것도 하지 않는다 |
 
 ---
 
@@ -222,21 +220,30 @@ flowchart LR
 
 ---
 
-## 🔒 Root Sync 전 머지 차단
+## 🔒 Root Sync 전 머지 검사
 
-spec 폴더는 `.gitignore` 대상이라 작업이 끝나면 사라진다. **루트 문서 갱신과 `_archive` 승격이 끝나기 전에 머지되면 명세 기록이 통째로 없어진다.** 세 겹으로 막는다.
+spec 폴더는 `.gitignore` 대상이라 작업이 끝나면 사라진다. **루트 문서 갱신과 `_archive` 승격이 끝나기 전에 머지되면 명세 기록이 통째로 없어진다.** PreToolUse hook이 agent의 `gh pr merge`를 가로채 두 가지를 함께 본다.
 
-| 층 | 무엇을 막나 |
+| 무엇을 보나 | 왜 |
 | --- | --- |
-| 📝 **draft PR** | Stage 8이 `--draft`로 연다. GitHub이 draft의 머지를 거부하므로 **사람도 agent도** 막힌다 |
-| 🔐 **`ready-pr`** | checklist 1~10 완료 + `_archive/pr-N-<spec>/spec.md`가 **HEAD에 커밋됐는지** 확인한 뒤에만 draft를 벗긴다 |
-| 🪝 **hook** | `gh pr merge`·`gh pr ready`를 Root Sync 미완 시 거절한다 |
-
-`ready-pr`은 스크립트 **안에서** gh를 부르므로 hook에 보이지 않는다. 그래서 **draft를 벗는 경로가 게이트를 확인하는 스크립트 하나로 좁혀진다.**
+| checklist의 Root Sync가 `completed`인가 | 단계가 끝났는지 |
+| `_archive/pr-N-<spec>/spec.md`가 **HEAD에 커밋됐는가** | 상태는 메인 에이전트가 찍는 값이라, 승격을 건너뛴 채 `completed`로 찍힐 수 있다 |
 
 staging만 한 사본은 통과하지 못한다 — 커밋되지 않은 파일은 PR에 올라가지 않기 때문이다.
 
-> 사람이 GitHub 웹에서 직접 draft를 해제하는 것까지는 막지 못한다. 이 설계가 막는 것은 **실수로 날아가는 경우**다.
+**무엇을 할지는 저장소가 정한다** — `.spec-harness/config.json`의 `merge.agent`.
+
+| 값 | Root Sync가 남았을 때 | 그 밖의 머지 |
+| --- | --- | --- |
+| **없음 (기본)** · `ask` | 🟡 사용자에게 확인을 띄운다 | 통과 |
+| `root_sync` | 🔴 거절 | 통과 |
+| `deny` | 🔴 거절 | 🔴 거절 (agent는 머지하지 않는다) |
+
+기본값이 막지 않고 묻기만 하는 이유는, 이 hook이 플러그인을 켠 모든 세션에 걸리기 때문이다. 하네스를 쓰지 않는 저장소에는 읽을 checklist가 없어 아무 일도 일어나지 않는다.
+
+> ⚠️ **어느 값이든 이 판정은 agent에게만 걸린다.** hook은 agent의 Bash 도구 호출만 보므로, **사람이 GitHub 웹에서 머지 버튼을 누르면 아무것도 막지 못한다.** 하네스가 강제할 수 있는 범위가 여기까지다.
+>
+> 사람의 머지까지 막으려면 **저장소 쪽에 규칙을 세워야 한다** — PR diff에 `_archive/pr-<번호>-<spec명>/spec.md`가 있는지 검사하는 CI job을 만들고, branch protection에서 그것을 필수 상태 검사(required status check)로 지정하는 방식이다.
 
 ---
 
@@ -365,7 +372,7 @@ cat ~/.claude/settings.json .claude/settings.json .claude/settings.local.json
   "template_dir": "docs/specs/_template",
   "spec_root": "docs/specs",
   "methodologies": ["ddd", "bdd"],
-  "pr": { "draft_until_root_sync": true },
+  "merge": { "agent": "deny" },
   "workspace": {
     "mode": "worktree",
     "base_ref": "develop",
@@ -382,7 +389,7 @@ cat ~/.claude/settings.json .claude/settings.json .claude/settings.local.json
 - **`template_dir`** — spec 문서 템플릿을 저장소 것으로 쓰고 싶을 때만 지정한다. 없으면 플러그인 내장 템플릿을 쓰므로 준비 없이도 시작할 수 있다.
 - **`spec_root`** — spec 작업 공간이 사는 곳(기본 `docs/specs`).
 - **`methodologies`** — 켤 방법론 이름 목록. 여러 개를 함께 켤 수 있고, 비어 있으면 코어만 돈다.
-- **`pr.draft_until_root_sync`** — PR을 draft로 열지(기본 `true`). draft PR을 건너뛰는 리뷰 봇을 쓰는 저장소만 `false`로 끈다 — 그때는 agent의 명령만 막히고 사람의 수동 머지는 막히지 않는다.
+- **`merge.agent`** — agent가 내는 PR 머지 명령을 어떻게 다룰지: `ask`(기본) · `root_sync` · `deny`. 각 값의 뜻은 위 "Root Sync 전 머지 검사" 절에 있다.
 - **`workspace`** — 작업 공간을 어떻게 만드는지. 저장소마다 브랜치 모델이 달라 값으로 받는다.
   - `mode`: `worktree`(기본, 메인 체크아웃을 건드리지 않음) 또는 `branch`
   - `base_ref`: 분기 기준. 없으면 저장소 기본 브랜치를 쓴다 — 하네스가 브랜치 이름을 가정하지 않는다
@@ -443,7 +450,7 @@ docs/specs/*            # 진행 중 spec 작업 공간 (휘발)
 | `spec.md`·`plan.md`·설계 문서·`scenarios.md` | 사람 · 메인 | 검사관 · developer · Root Sync 승격 |
 | `analysis.json` | 메인(검사관 리포트 병합) | `close-analyze` · `preflight` · Root Sync 승격 |
 | `phases/<phase>/step<N>.md` | Steps(6) | developer · reviewer · `lint-steps` |
-| `workflow-checklist.json` | 각 단계 · `close-analyze` · `set-stage` | `preflight` · `ready-pr` |
+| `workflow-checklist.json` | 각 단계 · `close-analyze` · `set-stage` | `preflight` · 머지 검사 hook |
 | `phases/**/index.json` | recorder · finalizer | preflight · 재실행 skip 판단 |
 | `step<N>-ac-output.json` | `verify-ac`(시도마다 누적) | reviewer(자기보고 대조) |
 | `logs/<role>.log` | 로깅 hook | 사람(사후 분석) |
