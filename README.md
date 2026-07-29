@@ -125,6 +125,7 @@ flowchart TD
 
 | | 무엇 |
 | --- | --- |
+| 📖 **skill `guide`** | 안내(`/spec-harness:guide`). 사용자가 겪을 흐름 — 개입 지점, 자동 구간, 막혔을 때 할 일 |
 | 🎬 **skill `run`** | 진입점(`/spec-harness:run`). 10단계를 지휘한다. 상세 동작·데이터 계약의 정본 |
 | ⚙️ **workflow `execute`** | 실행 오케스트레이터(`/spec-harness:execute`). step마다 구현→검증→검토→커밋→기록 |
 | 🔍 **검사관 6인** | `analyzer-traceability`·`-domain`·`-concurrency`·`-access`·`-rules`·`-clarity` |
@@ -241,13 +242,107 @@ staging만 한 사본은 통과하지 못한다 — 커밋되지 않은 파일�
 
 ## 📦 설치
 
+설치는 **두 가지를 각각 등록하는 일**이다. 하나만 넣으면 그 머신에서는 동작하지만 다른 사람에게는 동작하지 않는다.
+
+| 무엇 | 설정 키 | 뜻 |
+| --- | --- | --- |
+| 📍 **주소** | `extraKnownMarketplaces` | 이 마켓플레이스 이름이 어느 저장소에서 오는가 |
+| 🔌 **켤 목록** | `enabledPlugins` | 그중 무엇을 활성화하는가 |
+
+둘을 넣는 명령이 다르고, 각각 어느 **범위**에 쓸지 고른다.
+
+| 범위 | 기록되는 파일 | 적용 대상 |
+| --- | --- | --- |
+| `user` | `~/.claude/settings.json` | 내 계정의 모든 프로젝트 |
+| `project` | `<저장소>/.claude/settings.json` — **커밋된다** | 이 저장소를 쓰는 모두 |
+| `local` | `<저장소>/.claude/settings.local.json` — gitignore 대상 | 나만, 이 저장소에서만 |
+
+### 🙋 나만 쓴다 — `user` 범위
+
 ```
 /plugin marketplace add KimYeonWook511/spec-harness-plugin
 /plugin install spec-harness@KimYeonWook511-harness
+/reload-plugins
+```
+
+두 명령 모두 범위를 지정하지 않으면 `user`가 기본이다.
+
+### 👥 팀 전체가 쓴다 — `project` 범위
+
+저장소를 클론한 사람이 같은 하네스를 쓰려면 주소와 켤 목록이 **둘 다 저장소 설정에** 있어야 한다.
+
+**① 주소 — 터미널에서 실행한다**
+
+```bash
+claude plugin marketplace add KimYeonWook511/spec-harness-plugin --scope project
+```
+
+> ⚠️ 세션 안 슬래시 명령(`/plugin marketplace add`)에는 `--scope`가 없다. 붙이면 옵션 문자열까지 저장소 주소로 읽어 실패한다. 이 단계만 터미널에서 실행한다.
+
+**② 켤 목록 — 세션에서 실행한다**
+
+```
+/plugin install spec-harness@KimYeonWook511-harness
+```
+
+메뉴에서 `Install for all collaborators on this repository (project scope)`를 고른다.
+
+**③ 적용하고 확인한다**
+
+```
+/reload-plugins
+/plugin list
+```
+
+`(project) ✔ enabled`로 표시되면 완료다.
+
+**④ 저장소 상태를 확인한다**
+
+```bash
+git diff .claude/settings.json
+```
+
+②가 `extraKnownMarketplaces`를 지우는 경우가 있다. 비어 있으면 ①을 다시 실행한다. 커밋할 상태는 두 키가 모두 있는 것이다.
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "KimYeonWook511-harness": {
+      "source": { "source": "github", "repo": "KimYeonWook511/spec-harness-plugin" }
+    }
+  },
+  "enabledPlugins": { "spec-harness@KimYeonWook511-harness": true }
+}
+```
+
+### 🔒 나만, 이 저장소에서만 — `local` 범위
+
+②에서 `Install for you, in this repo only (local scope)`를 고른다. `.claude/settings.local.json`에 기록되어 커밋되지 않는다.
+
+### ⚠️ 미리 알아둘 것
+
+**`user`에 이미 설치돼 있으면 범위를 바꾸지 못한다.** `/plugin install`이 `already installed globally`로 끝나 범위 선택 화면에 닿지 못한다. `project`로 옮기려면 `user` 쪽을 먼저 정리한다.
+
+**제거할 때 `--scope`를 생략하면 모든 범위에서 지운다.** 커밋해 둔 프로젝트 선언과 로컬에 받아 둔 마켓플레이스 사본까지 함께 사라진다.
+
+```bash
+claude plugin marketplace remove <이름> --scope user   # 그 범위만
+claude plugin marketplace remove <이름>                # 모든 범위 + 로컬 사본
+```
+
+지울 때는 **남길 범위에 먼저 선언을 만든 뒤** 지울 범위를 지정한다.
+
+**`/plugin list`의 범위 표기는 켤 목록 쪽이다.** `(project)`는 활성화 선언이 저장소에 있다는 뜻이고, 주소가 어디 있는지는 알려주지 않는다.
+
+**그 머신에서 동작하는 것과 팀에 공유되는 것은 다르다.** 마켓플레이스를 한 번 등록하면 그 머신에 사본이 남아, 주소 선언이 없어도 동작한다. 저장소 설정만으로 되는지 보려면 `user` 범위 선언을 지우고 확인한다. 세 파일을 직접 읽는 것이 가장 확실하다.
+
+```bash
+cat ~/.claude/settings.json .claude/settings.json .claude/settings.local.json
 ```
 
 ### 사용
 
+- 안내: `/spec-harness:guide` — 전체 흐름과 내가 개입할 지점
 - 진입: `/spec-harness:run`
 - 실행 워크플로: `/spec-harness:execute`
 
