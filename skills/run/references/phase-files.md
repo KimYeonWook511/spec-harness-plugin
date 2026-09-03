@@ -16,7 +16,7 @@ SKILL.md의 흐름을 이해한 뒤, 구체 스펙이 필요할 때 이 문서�
 ## 1. 디렉터리 레이아웃
 
 ```
-<SPEC_ROOT>/<spec>/                  # ── 작업 중 .gitignore (워킹트리 휘발 작업 공간)
+<SPEC_ROOT>/<spec>/                  # ── 정본은 추적, 진행 상태·실행 부산물만 .gitignore
 ├── spec.md                         # spec 작업 스펙 (제품 전체 명세 아님)
 ├── plan.md                         # 총괄 설계서 (하위 설계 문서의 상위 인덱스)
 ├── architecture.md                 # 구조·레이어·데이터 흐름 (delta 스냅샷, plan 하위)
@@ -129,7 +129,7 @@ Specify(2)에서 worktree를 만들 때 템플릿 폴더에서 복사해 만든�
 - Stage 1~6은 진행하며 작성·갱신한다. Stage 7(Analyze)은 `close-analyze`만 `completed`로 만든다.
 - `Execution`(8)은 **메인이 Stage 8 자동 흐름으로 갱신**한다 — 진입 시 `set-stage … in_progress`, phase 루프를 다 돈 뒤 `set-stage … completed`를 자동 호출(spec 단위 1회씩). `PR Review`(9)·`Root Sync`(10)은 리뷰 결과·승격 완료를 사람이 확인한 시점에 `set-stage`로 갱신한다. preflight·finalize는 phase 단위라 이 Stage들을 건드리지 않는다(기계가 spec 레벨 Stage를 자기 판단으로 바꾸지 않는다).
 - 단 10은 9가 `completed`된 뒤에만 갱신한다(리뷰 코멘트 부재를 9 완료로 보지 않는다). Stage 10이 마지막이며, 이후 merge는 사람이 수동으로 한다.
-- 이 파일은 로컬 추적용이다(spec 폴더 전체가 `.gitignore` — 6장 참고).
+- 이 파일은 로컬 추적용이다(진행 상태라 `.gitignore` 대상 — 6장 참고).
 
 ### analysis.json (Analyze 판정 + 항목별 처리)
 
@@ -321,7 +321,7 @@ workflow(JS)는 각 agent의 반환 JSON으로 분기한다. agent는 **마지�
 
 ## 6. 실행 산출물 vs 정본
 
-**`<SPEC_ROOT>/<spec-name>/` 아래는 작업 중 `.gitignore` 대상이다.** 그래서 아래 표에 "커밋 여부" 칸이 없다. git에 남는 것은 spec 폴더 바깥의 코드 커밋(step별 committer)과, Root Sync(10)에서 `_archive/pr-<번호>-<spec명>/`로 복사되는 spec 정본이다(`_archive`만 추적 예외).
+**`<SPEC_ROOT>/<spec-name>/` 아래에서 `.gitignore` 대상은 진행 상태·실행 부산물뿐이다.** spec 정본은 Stage 8 진입 때 한 번 커밋되고, Root Sync(10)에서 `_archive/pr-<번호>-<spec명>/`로 옮겨진다. 그 사이 as-built 수정은 그것을 만든 step 커밋에 함께 들어간다.
 
 - **휘발로 남기는 것**: `index.json`·`workflow-checklist.json`(진행 상태), `step<N>-ac-output.json`·`logs/`(실행 부산물).
 - **승격하는 것**: 그 밖의 모든 `.md` — `spec.md`·`plan.md`·`architecture.md`·`data-model.md`·`db-schema.md`·`api-spec.md`·`adr.md`·`scenarios.md`·`interview.md`·`research.md`·`step<N>.md` 중 작성된 것. 그리고 `analysis.json` — 무엇을 발견하고 왜 그렇게 처리했는지를 나중에 되짚을 유일한 근거다.
@@ -336,6 +336,6 @@ workflow(JS)는 각 agent의 반환 JSON으로 분기한다. agent는 **마지�
 | `logs/<role>.log` | 로깅 hook | 사람(사후 분석·디버깅) |
 
 - developer/recorder/committer/finalizer는 자기 영역 밖의 정본을 건드리지 않는다.
-- phase index는 committer가 staging하지 않는다(어차피 `.gitignore`라 잡히지 않는다). finalizer가 phase 끝에 워킹트리 상태로 동기화한다.
+- phase index는 committer가 staging하지 않는다(진행 상태라 `.gitignore`에 걸려 잡히지 않는다). finalizer가 phase 끝에 워킹트리 상태로 동기화한다.
 - **`stepN-output.json`은 만들지 않는다.** 결과를 agent
   반환값으로 받고 검증은 ac-output.json·git·log·index가 대신하므로 읽는 주체가 없다(dead artifact 회피).

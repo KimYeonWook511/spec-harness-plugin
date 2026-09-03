@@ -222,7 +222,7 @@ flowchart LR
 
 ## 🔒 Root Sync 전 머지 검사
 
-spec 폴더는 `.gitignore` 대상이라 작업이 끝나면 사라진다. **루트 문서 갱신과 `_archive` 승격이 끝나기 전에 머지되면 명세 기록이 통째로 없어진다.** PreToolUse hook이 agent의 `gh pr merge`를 가로채 두 가지를 함께 본다.
+작업 폴더는 Root Sync에서 `_archive/`로 옮겨진다. **루트 문서 갱신과 그 옮김이 끝나기 전에 머지되면 명세 기록이 작업 폴더째로 남아 정리되지 않는다.** PreToolUse hook이 agent의 `gh pr merge`를 가로채 두 가지를 함께 본다.
 
 | 무엇을 보나 | 왜 |
 | --- | --- |
@@ -401,10 +401,19 @@ cat ~/.claude/settings.json .claude/settings.json .claude/settings.local.json
 하네스는 저장소 파일을 대신 고치지 않는다. 아래 규칙은 저장소가 직접 추가한다.
 
 ```gitignore
-/.spec-harness/run/     # 실행 중 생기는 진행 마커·로그 상태 (휘발)
-docs/specs/*            # 진행 중 spec 작업 공간 (휘발)
-!docs/specs/_archive    # 완료 후 승격한 아카이브만 추적
+/.spec-harness/run/                         # 실행 중 생기는 진행 마커·로그 상태 (휘발)
+
+# spec 작업 공간 — 정본은 추적하고 진행 상태·실행 부산물만 무시한다
+docs/specs/*/workflow-checklist.json
+docs/specs/*/phases/index.json
+docs/specs/*/phases/*/index.json
+docs/specs/*/phases/*/step*-ac-output.json
+docs/specs/*/phases/*/logs/
 ```
+
+**spec 문서를 추적하는 이유**: 루트 상태 문서 갱신은 Root Sync까지 미뤄지는데, 그 사이 리뷰어는 "루트가 왜 코드와 안 맞나"를 판단할 근거가 없다. 그 근거가 spec 문서에 있으므로 PR 에서 보여야 한다. Stage 8 진입 때 한 번 커밋되고, Root Sync에서 `_archive/`로 옮겨진다.
+
+`docs/specs`가 아닌 곳을 쓰면 경로를 그 값으로 바꾼다(`spec_root` 설정).
 
 `.spec-harness/config.json`은 **커밋한다** — 그 저장소의 규칙 선언이라 팀이 공유해야 한다. `.spec-harness/` 전체를 무시하면 설정까지 빠져 규칙 주입이 조용히 사라진다.
 
@@ -443,7 +452,7 @@ docs/specs/*            # 진행 중 spec 작업 공간 (휘발)
 
 ## 🗂️ 상태·산출 파일
 
-**spec 폴더 아래는 작업 중 `.gitignore` 대상이다.** git에 남는 것은 spec 폴더 바깥의 코드 커밋과, Root Sync에서 `_archive/pr-<번호>-<spec명>/`로 승격되는 정본뿐이다.
+**spec 폴더 아래에서 `.gitignore` 대상은 진행 상태·실행 부산물뿐이다.** 정본은 Stage 8 진입 때 커밋되어 PR 에서 보이고, Root Sync에서 `_archive/pr-<번호>-<spec명>/`로 옮겨진다.
 
 | 파일 | 누가 쓰나 | 누가 읽나 |
 | --- | --- | --- |

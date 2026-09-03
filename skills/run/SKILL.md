@@ -124,7 +124,7 @@ developer→reviewer→committer→recorder 서브에이전트를 돌린 뒤 fin
 - `execute.py` 실행 전 반드시 사용자에게 진행 의사를 확인하고, 사용자가 진행을 승인한 뒤에만 실행한다(가벼운 확인 — 별도 Plan Mode·`ExitPlanMode` 절차는 거치지 않는다). 이 게이트는 스크립트가 막지 않으므로 메인 에이전트가 지킨다.
 - Stage 8(Execution)에서 연 PR은 **Root Sync(10)가 끝나기 전에 머지하지 않는다.** 먼저 머지되면 루트 문서 갱신과 `_archive` 승격이 날아간다.
 - Stage 8(Execution)에서 PR을 연 뒤 메인 에이전트는 멈추고 사용자의 PR Review(9) 검토 완료 신호를 기다린다. "리뷰 코멘트가 아직 없음"은 PR Review 완료가 아니다. PR Review 완료가 확인되기 전에는 Root Sync(10)에 착수하지 않는다.
-- Stage 10(Root Sync)는 두 가지를 한다. (1) 루트 문서 갱신 — ADR=append, 스냅샷(architecture/db-schema/api-spec)=overwrite로 동작이 다르다. (2) `_archive` 승격 — spec 정본(진행 상태·실행 부산물을 뺀 모든 문서)을 `<SPEC_ROOT>/_archive/pr-<번호>-<spec명>/`로 복사해 같은 PR에 커밋한다(진행 상태·실행 부산물은 휘발로 남김). 한 지시로 뭉치지 않는다(아래 Stage 8 참고).
+- Stage 10(Root Sync)는 두 가지를 한다. (1) 루트 문서 갱신 — ADR=append, 스냅샷(architecture/db-schema/api-spec)=overwrite로 동작이 다르다. (2) `_archive` 승격 — Stage 8에서 커밋해 둔 spec 정본을 `<SPEC_ROOT>/_archive/pr-<번호>-<spec명>/`로 옮겨 같은 PR에 커밋한다(진행 상태·실행 부산물은 추적되지 않아 함께 사라진다). 한 지시로 뭉치지 않는다(아래 Stage 8 참고).
 
 ---
 
@@ -669,14 +669,29 @@ phase를 완주시키지 않는다 — 대신 preflight로 workflow 인자를 �
 실행 전 아래 순서를 반드시 거친다. 이 순서는 스크립트가 막지 않으므로 메인 에이전트가 지킨다(`preflight`가 막는 것은 checklist 상태뿐이다).
 
 1. Analyze까지의 결과(작성한 spec 문서·phase 경로)와 실행 계획을 사용자에게 보고하고, 실행 진행 의사를 가볍게 확인받는다. 별도 Plan Mode·`ExitPlanMode` 절차는 거치지 않는다.
-2. `AskUserQuestion`으로 agent별 실행 모델을 수집한다. (아래 "실행 옵션 수집" 절 참고)
-3. 수집한 모델을 phase index의 `execution` 필드에 기록한 뒤, preflight → workflow 기동으로 실행한다.
+2. **명세를 먼저 커밋한다** (아래 절).
+3. `AskUserQuestion`으로 agent별 실행 모델을 수집한다. (아래 "실행 옵션 수집" 절 참고)
+4. 수집한 모델을 phase index의 `execution` 필드에 기록한 뒤, preflight → workflow 기동으로 실행한다.
 
 - workflow는 worktree 안에서 기동하며, committer·finalizer 서브에이전트를 통해 커밋·push를 수행한다.
 - 이 Stage에 들어가기 전 checklist의 `Interview`부터 `Analyze`까지(1~7)는 모두 `completed`여야 한다.
 - 사용자가 승인하지 않으면 구현으로 진행하지 않는다.
 
-> spec 문서(spec·plan·scenarios·architecture·data-model·db-schema·api-spec·adr)와 phase·step·index·checklist는 `<SPEC_ROOT>/<spec-name>/` 아래에 있고 **작업 중에는 `.gitignore` 대상**이라 커밋하지 않는다(예외: Stage 8에서 `<SPEC_ROOT>/_archive/`로 승격되는 사본). 따라서 workflow 기동 전 "spec 문서 사전 커밋" 단계는 없다. committer는 코드 변경만 커밋하며, 작업 중 spec 폴더는 git에 잡히지 않는다.
+> spec 정본(spec 문서·step 문서·`analysis.json` 등)은 **Stage 8 진입 때 한 번 커밋해 PR 에서 보이게 한다**(아래 "명세를 먼저 커밋한다"). 그 뒤 구현이 설계와 달라져 spec 설계 md 를 as-built 로 고치면 그 수정은 **그것을 만든 step 의 커밋에 함께** 들어간다. 진행 상태·실행 부산물(`workflow-checklist.json`·`phases/**/index.json`·`step<N>-ac-output.json`·`logs/`)만 `.gitignore` 대상이라 커밋되지 않는다.
+
+#### 명세를 먼저 커밋한다
+
+구현을 시작하기 전에 spec 정본을 **한 커밋으로** 남긴다. 그래야 PR을 여는 순간부터 리뷰어가 그 문서를 볼 수 있다.
+
+```
+docs: <spec명> 명세를 기록한다
+```
+
+**왜 먼저 커밋하나.** 루트 상태 문서 갱신은 Root Sync(10)까지 미뤄지는데, 그 사이 리뷰어는 "루트가 왜 코드와 안 맞나"를 판단할 근거가 없다. 그 근거가 spec 문서에 있으므로 리뷰 전에 보여야 한다. 마지막에 한 번에 올리면 정작 리뷰 시점에는 안 보인다.
+
+커밋 대상은 spec 정본이다 — `.md`, `analysis.json`, 방법론이 요구한 `.yaml`. 진행 상태·실행 부산물은 `.gitignore`가 막는다.
+
+> 저장소가 이 형태를 받으려면 `.gitignore`가 spec 폴더를 통째로 무시하지 않고 **진행 상태·실행 부산물만** 무시해야 한다. 설치 안내의 `.gitignore` 절을 따른다.
 
 #### 실행 옵션 수집
 
@@ -773,11 +788,11 @@ python3 "<SKILL_DIR>/scripts/execute.py" reset-step <SPEC_ROOT>/<spec-name>/phas
 
 #### 커밋·finalize
 
-step별 committer는 **코드 변경만 커밋**한다. spec 폴더(`<SPEC_ROOT>/<spec-name>/` — spec 문서·phase·step·index·checklist)는 전부 `.gitignore` 대상이라 `git status`·`git add`에 잡히지 않으므로, committer가 신경 쓸 필요가 없다.
+step별 committer는 **코드 변경과, 그 step 이 as-built 로 고친 spec 설계 문서를 함께** 커밋한다. 진행 상태·실행 부산물은 `.gitignore` 대상이라 `git status`·`git add`에 잡히지 않으므로 신경 쓸 필요가 없다.
 
 phase 종료 시점에 finalizer(`execute.py finalize`)는 git 커밋을 만들지 않는다. 대신 다음을 한다:
 
-1. phase index.json에 `completed_at`을 기록하고, 상위 spec `phases/index.json`의 이 phase status를 `completed`로 동기화한다. (둘 다 gitignore라 워킹트리 상태로만 남는다 — 재개·skip 판단에 쓰인다.)
+1. phase index.json에 `completed_at`을 기록하고, 상위 spec `phases/index.json`의 이 phase status를 `completed`로 동기화한다. (둘 다 진행 상태 파일이라 gitignore 대상이고 워킹트리 상태로만 남는다 — 재개·skip 판단에 쓰인다.)
 2. `execution.push`가 true이고 `--no-push`가 아니면 현재 feature 브랜치를 원격으로 push한다. 이 push가 올리는 것은 step별 committer가 만든 **코드 커밋**이다.
 
 `execution.push`가 false면 push를 생략하지만, PR은 원격에 push해야 열 수 있으므로 Stage 9(PR Review)로 진행하려면 push가 필요하다.
@@ -824,11 +839,12 @@ review 처리 방식:
 
 위 루트 동기화와 **별개로**, 이 spec의 작업 기록을 영구 보존한다.
 
-- **`_archive` 승격**: 작업 중 휘발 상태였던 spec 문서 중 **정본만** `<SPEC_ROOT>/_archive/pr-<PR번호>-<spec명>/`로 복사한다. PR 번호는 Stage 8(Execution)에서 PR을 열 때 이미 정해져 있다. `<SPEC_ROOT>/*`는 `.gitignore` 대상이지만 `_archive`는 예외라(`!<SPEC_ROOT>/_archive`), 이 사본만 git에 잡혀 같은 PR에 커밋된다.
-  - **승격 제외(휘발로 남김)**: 진행 상태·실행 부산물 — `phases/index.json`, `phases/<phase>/index.json`, `workflow-checklist.json`, `step<N>-ac-output.json`, `logs/`.
+- **`_archive` 승격**: Stage 8에서 커밋해 둔 spec 정본을 `<SPEC_ROOT>/_archive/pr-<PR번호>-<spec명>/`로 **옮긴다**(`git mv`). 작업 폴더는 그 자리에서 사라지고, 머지된 트리에는 `_archive` 사본만 남는다. PR 번호는 Stage 8에서 PR을 열 때 이미 정해져 있다.
+  - **복사가 아니라 옮기는 이유**: 같은 내용이 두 경로에 남으면 어느 쪽이 정본인지 흐려지고, 나중에 한쪽만 고쳐지면 갈라진다. `_archive`는 끝난 작업이 가는 곳이므로 작업 폴더가 거기로 들어가는 것이 맞다.
+  - **옮기지 않는 것**: 진행 상태·실행 부산물 — `phases/index.json`, `phases/<phase>/index.json`, `workflow-checklist.json`, `step<N>-ac-output.json`, `logs/`. `.gitignore` 대상이라 애초에 추적되지 않으며, 작업 폴더를 비울 때 함께 사라진다.
   - **승격 대상**: 그 밖의 **모든 `.md`**와 `analysis.json`. `.md` 목록을 열거하지 않는 이유는, 열거하면 새 문서가 생길 때 조용히 빠지기 때문이다. 실제로는 `spec.md`·`plan.md`·`scenarios.md`·`data-model.md`·`architecture.md`·`db-schema.md`·`api-spec.md`·`adr.md`·`interview.md`·`research.md`와 `phases/<phase>/step<N>.md` 중 작성된 것이 해당한다.
-  - **`scenarios.md`·`data-model.md`를 빠뜨리면 안 된다** — 동결된 계약과 상태 전이 정본이다. spec 폴더는 작업 후 지워지므로, 승격하지 않으면 step 문서의 `## 검증 대상`이 가리키는 시나리오 식별자가 존재하지 않는 문서를 향하게 된다.
-  - 복사만 한다. 내용을 재작성하지 않는다. 루트 ADR append는 위에서 이미 했으므로, `_archive`의 `adr.md`는 "이 spec이 그 결정에 어떻게 도달했나"의 맥락 사본이다.
+  - **`scenarios.md`·`data-model.md`를 빠뜨리면 안 된다** — 동결된 계약과 상태 전이 정본이다. 작업 폴더는 이 단계에서 비워지므로, 옮기지 않으면 step 문서의 `## 검증 대상`이 가리키는 시나리오 식별자가 존재하지 않는 문서를 향하게 된다.
+  - 옮기기만 한다. 내용을 재작성하지 않는다. 루트 ADR append는 위에서 이미 했으므로, `_archive`의 `adr.md`는 "이 spec이 그 결정에 어떻게 도달했나"의 맥락 기록이다.
 
 sync 후 agent는 변경 요약(루트 문서 중 무엇을 갱신·보존했는지, `_archive`로 무엇을 승격했는지)을 보고하고 사용자 검토를 받는다. 커밋·push는 Stage 8(Execution)에서 오픈한 같은 PR에 쌓는다(루트 문서 갱신 + `_archive` 사본이 함께 올라간다).
 

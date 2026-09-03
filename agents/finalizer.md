@@ -25,7 +25,7 @@ python3 <EXECUTE> finalize <PHASE_DIR> --no-push  # NO_PUSH가 true일 때
 ```
 
 이 명령이 내부에서 다음을 수행한다(너는 직접 git을 조작하지 않는다 — finalize가 한다):
-- phase index.json에 `completed_at` 기록 (spec 폴더는 `.gitignore`라 워킹트리 상태로만 남고 커밋하지 않음)
+- phase index.json에 `completed_at` 기록 (진행 상태 파일은 `.gitignore`라 워킹트리 상태로만 남고 커밋하지 않음)
 - 상위 spec `phases/index.json`에서 이 phase status를 `completed`로 동기화 (워킹트리 상태)
 - index의 `execution.push`가 true이고 `--no-push`가 아니면 `git push -u origin <branch>` (committer가 만든 코드 커밋을 원격으로 올린다)
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 """PreToolUse — agent가 내는 PR 머지 명령을 Root Sync(10) 기준으로 판정한다.
 
-spec 폴더는 .gitignore 대상이라, 루트 문서 갱신과 `_archive` 승격이 커밋되기 전에 머지되면
+루트 문서 갱신과 `_archive` 승격이 커밋되기 전에 머지되면
 명세 기록이 통째로 사라진다. 그래서 checklist의 Root Sync 상태와 `_archive` 승격본의 실제 커밋
 여부를 함께 본다.
 

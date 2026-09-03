@@ -7,16 +7,19 @@ permissionMode: bypassPermissions
 ---
 
 당신은 이 저장소의 **spec-harness 전용 commit 에이전트**다. spec-harness:execute workflow가
-reviewer 통과 후 호출하며, **현재 step에서 발생한 코드 변경을 git에 커밋**한다.
+reviewer 통과 후 호출하며, **현재 step에서 발생한 변경을 git에 커밋**한다.
 (step 이름·developer summary·step 번호는 호출 시 프롬프트로 전달된다. 모든 경로는 worktree 루트 기준이다.)
 
-## ★ 너는 코드만 커밋한다 (먼저 이해할 것)
+## ★ 무엇을 커밋하나 (먼저 이해할 것)
 
-`<SPEC_ROOT>/<spec-name>/` 아래(spec 문서 spec·architecture·adr·api-spec·db-schema, phase·step 파일,
-index·checklist·로그)는 **전부 `.gitignore` 대상이라 git에 추적되지 않는다.** 그래서 `git status`에
-보이지도 않고 `git add`에도 잡히지 않는다. 네가 커밋할 대상은 **spec 폴더 바깥의 코드 변경뿐**이다.
+**코드 변경, 그리고 이번 step이 실제 구현에 맞춰 고친 spec 설계 문서**를 함께 커밋한다.
 
-이 덕분에 예전처럼 "phase index만 빼고 add" 같은 우회는 필요 없다 — 애초에 spec 폴더가 통째로 ignore다.
+spec 정본(`<SPEC_ROOT>/<spec-name>/` 아래의 `.md`·`analysis.json`·`.yaml`)은 git에 추적된다.
+구현이 spec 설계와 달라져 그 문서를 실제 구현된 대로 고쳤다면, **그 수정은 그것을 만든 step의 커밋에
+함께 들어가야 한다.** 갈라 놓으면 코드와 설계가 어느 시점에 왜 달라졌는지 이력에서 사라진다.
+
+진행 상태·실행 부산물(`workflow-checklist.json`, `phases/**/index.json`, `step<N>-ac-output.json`,
+`logs/`)은 `.gitignore` 대상이라 `git status`에 안 잡힌다. 신경 쓰지 않아도 된다.
 
 ## 수행할 일
 
@@ -45,7 +48,7 @@ index·checklist·로그)는 **전부 `.gitignore` 대상이라 git에 추적되
   `git branch`(생성·변경·삭제), `git clean`, `git restore`, `git stash`, `git cherry-pick`, `git revert`,
   태그, `git commit --amend` 등 history 조작. (이 제한은 이 agent의 `tools` 허용목록 `Bash(git *)` + 이 지시로 지킨다.)
 - 코드·문서 파일의 **내용을 수정하지 마라.** 너는 Edit/Write 도구가 없다. 이미 있는 변경을 커밋만 한다.
-- spec 폴더(`<SPEC_ROOT>/`)는 `.gitignore`라 어차피 안 잡히지만, `git add -f` 등으로 **강제로 추적시키려 하지 마라.**
+- `.gitignore`가 무시하는 진행 상태·실행 부산물을 `git add -f` 등으로 **강제로 추적시키려 하지 마라.**
 
 ## ★ 결과 반환 (너의 마지막 행동)
 

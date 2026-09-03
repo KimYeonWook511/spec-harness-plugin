@@ -527,7 +527,7 @@ def cmd_finalize(args) -> int:
     """phase 닫기: 이 phase의 completed_at 기록·spec index 동기화(워킹트리) + 선택적 push.
 
     finalizer agent가 phase 끝에 호출한다 — workflow 한 번 기동 = phase 하나 완주.
-    spec 폴더(phase index 포함)는 .gitignore 대상이라 커밋하지 않는다 — 여기서는
+    진행 상태 파일(phase index 포함)은 .gitignore 대상이라 커밋하지 않는다 — 여기서는
     워킹트리 상태만 갱신하고, committer가 만든 코드 커밋을 원격으로 push한다.
 
     checklist의 Execution(Stage 8) 상태는 건드리지 않는다. checklist는 spec 레벨 하나이고
