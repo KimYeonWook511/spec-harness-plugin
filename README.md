@@ -404,14 +404,16 @@ cat ~/.claude/settings.json .claude/settings.json .claude/settings.local.json
 /.spec-harness/run/                         # 실행 중 생기는 진행 마커·로그 상태 (휘발)
 
 # spec 작업 공간 — 정본은 추적하고 진행 상태·실행 부산물만 무시한다
-docs/specs/*/workflow-checklist.json
-docs/specs/*/phases/index.json
-docs/specs/*/phases/*/index.json
-docs/specs/*/phases/*/step*-ac-output.json
-docs/specs/*/phases/*/logs/
+docs/specs/**/workflow-checklist.json
+docs/specs/**/phases/index.json
+docs/specs/**/phases/*/index.json
+docs/specs/**/phases/*/step*-ac-output.json
+docs/specs/**/phases/*/logs/
 ```
 
 **spec 문서를 추적하는 이유**: 루트 상태 문서 갱신은 Root Sync까지 미뤄지는데, 그 사이 리뷰어는 "루트가 왜 코드와 안 맞나"를 판단할 근거가 없다. 그 근거가 spec 문서에 있으므로 PR 에서 보여야 한다. Stage 8 진입 때 한 번 커밋되고, Root Sync에서 `_archive/`로 옮겨진다.
+
+`**`로 쓰는 이유: Root Sync가 작업 폴더를 `_archive/pr-<번호>-<이름>/`로 옮기면 경로가 한 단계 깊어진다. `*` 한 개면 옮긴 뒤 이 파일들이 무시되지 않아, 승격 대상이 아닌 실행 부산물이 아카이브에 들어간다.
 
 `docs/specs`가 아닌 곳을 쓰면 경로를 그 값으로 바꾼다(`spec_root` 설정).
 
