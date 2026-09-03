@@ -33,9 +33,9 @@ flowchart TD
     FZ --> S6["6️⃣ Steps<br>step 분해 + 검증 대상 + AC"]
     S6 --> S7["7️⃣ Analyze<br>검사관 6인 + 항목별 처리"]
     S7 --> CA{{"🚦 close-analyze<br>CRITICAL 해소 · step 형식"}}
-    CA --> S8["8️⃣ Execution<br>workflow 완주 → push → PR"]
+    CA --> S8["8️⃣ Execution<br>명세 커밋 → workflow 완주 → PR"]
     S8 --> S9["9️⃣ PR Review<br>사람이 검토"]
-    S9 --> S10["🔟 Root Sync<br>루트 문서 갱신 + _archive 승격"]
+    S9 --> S10["🔟 Root Sync<br>루트 문서 갱신 + _archive 이동"]
     S10 --> M["사람이 머지"]
 
     S4 -.모호함 발견.-> S3
@@ -189,7 +189,7 @@ flowchart TD
     H -->|예| I["🔎 Reviewer<br>read-only 검토 + AC 결과 파일 대조"]
     I -->|retryable| J
     I -->|blocked| L
-    I -->|approved| K["💾 Committer<br>코드만 커밋"]
+    I -->|approved| K["💾 Committer<br>코드 + as-built 문서 커밋"]
     J --> G
     K --> R["🗒️ Recorder<br>step status를 phase index에 기록"]
     R --> N{"다음 pending step?"}
@@ -464,8 +464,8 @@ docs/specs/*/phases/*/logs/
 | `step<N>-ac-output.json` | `verify-ac`(시도마다 누적) | reviewer(자기보고 대조) |
 | `logs/<role>.log` | 로깅 hook | 사람(사후 분석) |
 
-- **승격하는 것**: 모든 `.md`와 `analysis.json`. 무엇을 발견하고 왜 그렇게 처리했는지가 나중에 되짚을 유일한 근거다.
-- **휘발로 남기는 것**: 진행 상태(`index.json`·checklist)와 실행 부산물(`ac-output`·`logs`).
+- **`_archive`로 옮기는 것**: 모든 `.md`와 `analysis.json`. 무엇을 발견하고 왜 그렇게 처리했는지가 나중에 되짚을 유일한 근거다.
+- **함께 사라지는 것**: 진행 상태(`index.json`·checklist)와 실행 부산물(`ac-output`·`logs`). 추적되지 않아 작업 폴더를 비울 때 없어진다.
 - 타임스탬프는 KST(+09:00).
 
 ---

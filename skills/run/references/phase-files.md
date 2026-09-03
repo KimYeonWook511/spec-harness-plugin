@@ -323,8 +323,8 @@ workflow(JS)는 각 agent의 반환 JSON으로 분기한다. agent는 **마지�
 
 **`<SPEC_ROOT>/<spec-name>/` 아래에서 `.gitignore` 대상은 진행 상태·실행 부산물뿐이다.** spec 정본은 Stage 8 진입 때 한 번 커밋되고, Root Sync(10)에서 `_archive/pr-<번호>-<spec명>/`로 옮겨진다. 그 사이 as-built 수정은 그것을 만든 step 커밋에 함께 들어간다.
 
-- **휘발로 남기는 것**: `index.json`·`workflow-checklist.json`(진행 상태), `step<N>-ac-output.json`·`logs/`(실행 부산물).
-- **승격하는 것**: 그 밖의 모든 `.md` — `spec.md`·`plan.md`·`architecture.md`·`data-model.md`·`db-schema.md`·`api-spec.md`·`adr.md`·`scenarios.md`·`interview.md`·`research.md`·`step<N>.md` 중 작성된 것. 그리고 `analysis.json` — 무엇을 발견하고 왜 그렇게 처리했는지를 나중에 되짚을 유일한 근거다.
+- **함께 사라지는 것**: `index.json`·`workflow-checklist.json`(진행 상태), `step<N>-ac-output.json`·`logs/`(실행 부산물). 추적되지 않아 작업 폴더를 비울 때 없어진다.
+- **`_archive`로 옮기는 것**: 그 밖의 모든 `.md` — `spec.md`·`plan.md`·`architecture.md`·`data-model.md`·`db-schema.md`·`api-spec.md`·`adr.md`·`scenarios.md`·`interview.md`·`research.md`·`step<N>.md` 중 작성된 것. 그리고 `analysis.json` — 무엇을 발견하고 왜 그렇게 처리했는지를 나중에 되짚을 유일한 근거다.
 
 보존 가치가 있는 결정·계약은 Root Sync에서 루트 문서로도 승격된다.
 
