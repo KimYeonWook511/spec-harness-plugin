@@ -11,10 +11,11 @@ JavaScript workflow(spec-harness:execute)로 옮겨갔고, execute.py는 **workf
   preflight       phase index.json을 읽어 {steps, execution}을 workflow args(JSON)로 stdout 출력
   build-context   현재 step의 developer 컨텍스트(CLAUDE.md·spec문서·규칙문서·이전step summary)를 조립해 출력
   verify-ac       step의 Acceptance Criteria를 실행·판정(acceptance_check) → ac-output.json 누적 + 결과 JSON 출력
-  record-step     phase index.json에 step.status/summary/completed_at 기록 (recorder agent 전용)
+  record-step     phase index.json에 step.status/summary/completed_at과 시도 이력(runs) 기록 (recorder agent 전용)
   reset-step      blocked/error step을 pending으로 되돌림 (사람이 원인을 고친 뒤 재개용)
   set-stage       spec 레벨 checklist의 Stage 8/9/10 상태 갱신 (메인의 Execution 자동 흐름 + PR Review/Root Sync — preflight·finalize는 안 건드림)
   finalize        phase 닫기: 이 phase의 completed_at·spec index 동기화(워킹트리) + 선택적 push (finalizer agent 전용)
+  export-history  phase index·ac-output의 실행 이력을 execution-history.json으로 모음 (Root Sync에서 _archive로 옮기기 전)
   lint-steps      step 문서의 Acceptance Criteria 파싱 계약 검사 (실행하지 않고 형식만)
   close-analyze   analysis.json의 CRITICAL 처리·step 형식을 확인하고 Analyze(7)를 닫음 + fingerprint 기록
 
@@ -449,6 +450,27 @@ def cmd_record_step(args) -> int:
     if args.summary:
         target["summary"] = args.summary
     ts = stamp()
+
+    # 실행 한 번 = run 한 칸. reset-step 뒤 재실행하면 칸이 늘어 중단 이력이 남는다.
+    # 이력은 회고 재료라 깨져도 상태 기록은 막지 않는다.
+    attempts_warning = None
+    if args.status in ("completed", "blocked", "error"):
+        attempts = []
+        if args.attempts:
+            try:
+                parsed = json.loads(args.attempts)
+                if isinstance(parsed, list):
+                    attempts = parsed
+                else:
+                    attempts_warning = "attempts가 목록이 아니라 비워 기록했다"
+            except json.JSONDecodeError as e:
+                attempts_warning = f"attempts JSON 파싱 실패로 비워 기록했다: {e}"
+        run = {"status": args.status, "recorded_at": ts, "attempts": attempts}
+        if args.status != "completed" and args.reason:
+            run["reason"] = args.reason
+        if attempts_warning:
+            run["attempts_error"] = attempts_warning
+        target.setdefault("runs", []).append(run)
     if args.status == "completed":
         target["completed_at"] = ts
         for stale in ("error_message", "blocked_reason"):
@@ -463,7 +485,10 @@ def cmd_record_step(args) -> int:
             target["error_message"] = args.reason
 
     write_json(p["phase_index"], index)
-    emit({"ok": True, "step": args.step, "status": args.status})
+    result = {"ok": True, "step": args.step, "status": args.status}
+    if attempts_warning:
+        result["warning"] = attempts_warning
+    emit(result)
     return 0
 
 
@@ -597,6 +622,77 @@ def _update_spec_index(p: dict, status: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # lint-steps · close-analyze — Analyze(7) 게이트
 # ─────────────────────────────────────────────────────────────────────────────
+def _ac_attempts(ac_path: Path) -> list:
+    """ac-output.json을 시도별 통과 여부와 실패 명령만으로 줄인다."""
+    if not ac_path.exists():
+        return []
+    try:
+        data = read_json(ac_path)
+    except (json.JSONDecodeError, OSError):
+        return [{"error": f"{ac_path.name}을 읽지 못했다"}]
+    out = []
+    for at in data.get("attempts", []) if isinstance(data, dict) else []:
+        if not isinstance(at, dict):
+            continue
+        failed = [
+            {k: r.get(k) for k in ("command", "expectExit", "actualExit")}
+            for r in at.get("results", []) if isinstance(r, dict) and not r.get("ok")
+        ]
+        out.append({"attempt": at.get("attempt"), "passed": at.get("passed"), "failed": failed})
+    return out
+
+
+def cmd_export_history(args) -> int:
+    """실행 이력을 `<spec>/execution-history.json`으로 모은다.
+
+    phase index와 ac-output은 진행 상태·실행 부산물이라 추적되지 않아 작업 폴더와 함께 사라진다.
+    Root Sync가 `_archive`로 옮기기 전에 이 파일을 만들어 함께 커밋해야 회고가 나중에 읽을 수 있다.
+    """
+    spec_dir = Path(args.spec_dir).resolve()
+    phases_dir = spec_dir / "phases"
+    if not phases_dir.is_dir():
+        emit({"ok": False, "error": f"phases 디렉터리가 없다: {phases_dir}"})
+        return 1
+
+    phase_names = []
+    spec_index = phases_dir / "index.json"
+    if spec_index.exists():
+        phase_names = [ph.get("phase") for ph in read_json(spec_index).get("phases", []) if ph.get("phase")]
+    if not phase_names:
+        phase_names = sorted(d.name for d in phases_dir.iterdir() if (d / "index.json").exists())
+
+    phases, steps_total = [], 0
+    for name in phase_names:
+        phase_index = phases_dir / name / "index.json"
+        if not phase_index.exists():
+            phases.append({"phase": name, "error": "phase index 없음"})
+            continue
+        index = read_json(phase_index)
+        steps = []
+        for s in index.get("steps", []):
+            n = s.get("step")
+            steps.append({
+                "step": n,
+                "name": s.get("name"),
+                "status": s.get("status"),
+                "summary": s.get("summary"),
+                "runs": s.get("runs", []),
+                "ac_attempts": _ac_attempts(phases_dir / name / f"step{n}-ac-output.json"),
+            })
+        steps_total += len(steps)
+        phases.append({
+            "phase": name,
+            "completed_at": index.get("completed_at"),
+            "execution": index.get("execution", {}),
+            "steps": steps,
+        })
+
+    out_path = spec_dir / "execution-history.json"
+    write_json(out_path, {"spec": spec_dir.name, "exported_at": stamp(), "phases": phases})
+    emit({"ok": True, "path": str(out_path), "phases": len(phases), "steps": steps_total})
+    return 0
+
+
 def cmd_lint_steps(args) -> int:
     """step 문서의 AC 파싱 계약을 실행 없이 검사한다."""
     spec_dir = Path(args.spec_dir).resolve()
@@ -696,6 +792,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_rec.add_argument("--status", required=True, choices=["completed", "blocked", "error", "pending", "in_progress"])
     p_rec.add_argument("--summary", default="")
     p_rec.add_argument("--reason", default="")
+    p_rec.add_argument("--attempts", default="", help="workflow가 모은 시도 이력(JSON 배열)")
     p_rec.set_defaults(func=cmd_record_step)
 
     p_reset = sub.add_parser("reset-step", help="blocked/error step을 pending으로 되돌림(사람이 고친 뒤)")
@@ -713,6 +810,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_fin.add_argument("phase_dir")
     p_fin.add_argument("--no-push", action="store_true")
     p_fin.set_defaults(func=cmd_finalize)
+
+    p_hist = sub.add_parser("export-history", help="실행 이력을 execution-history.json으로 모음(Root Sync 전)")
+    p_hist.add_argument("spec_dir", help="spec 디렉터리(phases/가 있는 spec 루트)")
+    p_hist.set_defaults(func=cmd_export_history)
 
     p_lint = sub.add_parser("lint-steps", help="step 문서의 AC 파싱 계약 검사(실행하지 않음)")
     p_lint.add_argument("spec_dir", help="spec 디렉터리(phases/가 있는 spec 루트)")

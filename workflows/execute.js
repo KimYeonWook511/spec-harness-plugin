@@ -21,6 +21,20 @@ export const meta = {
 // 한 step의 시도 상한. 형식 오류·AC 미통과·재검토 요청을 합쳐 센다.
 const MAX_RETRIES = 3;
 
+// 시도 이력 한 칸의 문자열 상한. recorder가 이력을 셸 인자로 옮기므로 길이를 묶는다.
+const HISTORY_TEXT_MAX = 300;
+
+// recorder가 작은따옴표로 감싸 넘기므로 작은따옴표를 없앤다. 작은따옴표 안에서는 다른 문자가 해석되지 않는다.
+function historyText(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const s = String(v).replace(/'/g, '’');
+  return s.length > HISTORY_TEXT_MAX ? `${s.slice(0, HISTORY_TEXT_MAX)}…` : s;
+}
+
+function historyEntry(attempt, outcome, detail, struggles) {
+  return { attempt, outcome, detail: historyText(detail), struggles: historyText(struggles) };
+}
+
 // agent 호출 래퍼 — opts(agentType/model/label/phase)를 여기 한 곳에서 조립.
 // 반환 형식은 각 agent 문서의 계약 + parseAgentJson으로만 보장한다.
 async function callAgent(agentType, model, prompt, label, phaseName) {
@@ -88,9 +102,10 @@ function committerPrompt(a, step, attempt, dev) {
     + `약속된 결과 JSON 한 개만 반환하라.`;
 }
 
-function recorderPrompt(a, step, status, summary, reason) {
+function recorderPrompt(a, step, status, summary, reason, history) {
   return `${commonVars(a, step, 0)}\n`
-    + `STATUS: ${status}\nSUMMARY: ${summary || ''}\nREASON: ${reason || ''}\n\n`
+    + `STATUS: ${status}\nSUMMARY: ${summary || ''}\nREASON: ${reason || ''}\n`
+    + `ATTEMPTS: ${JSON.stringify(history || [])}\n\n`
     + `record-step으로 위 step의 상태를 phase index에 기록하라. 결과 JSON을 그대로 반환하라.`;
 }
 
@@ -107,6 +122,8 @@ async function runStep(a, step) {
   const revModel = a.execution && a.execution.reviewer_model;
   const comModel = a.execution && a.execution.committer_model;
   let prevError = null;
+  // 회고 재료. reviewer는 파일을 쓰지 않으므로 판정은 여기서만 남는다.
+  const history = [];
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     const tag = `step${step.step}`;
@@ -116,16 +133,20 @@ async function runStep(a, step) {
       'spec-harness:developer', devModel, developerPrompt(a, step, attempt, prevError), `${tag}:developer`, 'Implement'));
     if (!dev || !dev.status) {
       prevError = 'developer 반환 JSON 파싱 실패 — 약속된 JSON 한 개만 출력해야 한다.';
+      history.push(historyEntry(attempt, 'developer_format', prevError, null));
       continue;
     }
     if (dev.status === 'blocked' || dev.status === 'error') {
-      return { stopped: dev.status, step: step.step, reason: dev.blocked_reason || 'developer가 중단 보고', summary: dev.summary };
+      const reason = dev.blocked_reason || 'developer가 중단 보고';
+      history.push(historyEntry(attempt, `developer_${dev.status}`, reason, dev.struggles));
+      return { stopped: dev.status, step: step.step, reason, summary: dev.summary, history };
     }
     if (!dev.ac || dev.ac.passed !== true) {
       const failed = dev.ac && Array.isArray(dev.ac.results)
         ? dev.ac.results.filter(r => !r.ok).map(r => `${r.command} (기대 ${r.expectExit}, 실제 ${r.actualExit})`).join('; ')
         : 'AC 미통과';
       prevError = `AC 미통과: ${failed}`;
+      history.push(historyEntry(attempt, 'ac_failed', failed, dev.struggles));
       continue;
     }
 
@@ -134,19 +155,25 @@ async function runStep(a, step) {
       'spec-harness:reviewer', revModel, reviewerPrompt(a, step, attempt, dev), `${tag}:reviewer`, 'Implement'));
     if (!rev || !rev.decision) {
       prevError = 'reviewer 반환 JSON 파싱 실패.';
+      history.push(historyEntry(attempt, 'reviewer_format', prevError, dev.struggles));
       continue;
     }
     if (rev.decision === 'blocked') {
-      return { stopped: 'blocked', step: step.step, reason: rev.message || 'reviewer가 blocked 판정', summary: dev.summary };
+      const reason = rev.message || 'reviewer가 blocked 판정';
+      history.push(historyEntry(attempt, 'review_blocked', reason, dev.struggles));
+      return { stopped: 'blocked', step: step.step, reason, summary: dev.summary, history };
     }
     if (rev.decision === 'retryable_error') {
       prevError = `reviewer 재시도 요청: ${rev.message || ''}`;
+      history.push(historyEntry(attempt, 'review_retry', rev.message, dev.struggles));
       continue;
     }
     if (rev.decision !== 'approved') {
       prevError = `알 수 없는 reviewer 판정(${rev.decision}) — 자동 승인하지 않는다.`;
+      history.push(historyEntry(attempt, 'reviewer_format', prevError, dev.struggles));
       continue;
     }
+    history.push(historyEntry(attempt, 'approved', rev.message, dev.struggles));
 
     // 3) committer (결과 신뢰, 엄격 검증 없음)
     const com = parseAgentJson(await callAgent(
@@ -154,11 +181,11 @@ async function runStep(a, step) {
 
     // 4) recorder — 정본 index에 completed 기록
     const rec = parseAgentJson(await callAgent('spec-harness:recorder', null,
-      recorderPrompt(a, step, 'completed', dev.summary, null), `${tag}:recorder`, 'Implement'));
+      recorderPrompt(a, step, 'completed', dev.summary, null, history), `${tag}:recorder`, 'Implement'));
     if (!rec || rec.ok !== true) {
       // 기록이 안 되면 재실행 시 이미 구현된 step을 다시 돈다. 커밋은 이미 남았으므로 사람이 확인해야 한다.
       return {
-        stopped: 'error', step: step.step, summary: dev.summary,
+        stopped: 'error', step: step.step, summary: dev.summary, history,
         reason: `step ${step.step}의 커밋은 끝났지만 phase index 기록이 실패했다`
           + `(${(rec && rec.error) || 'recorder 반환을 파싱하지 못했다'}). `
           + `index.json의 step ${step.step} status를 확인하고 필요하면 record-step으로 직접 기록하라.`,
@@ -168,7 +195,7 @@ async function runStep(a, step) {
     return { ok: true, step: step.step, summary: dev.summary, commits: com.commits || [] };
   }
 
-  return { stopped: 'error', step: step.step, reason: `${MAX_RETRIES}회 시도 후 실패: ${prevError || ''}` };
+  return { stopped: 'error', step: step.step, reason: `${MAX_RETRIES}회 시도 후 실패: ${prevError || ''}`, history };
 }
 
 // ── 본문 (top-level) ────────────────────────────────────────────
@@ -214,7 +241,7 @@ for (const step of a.steps) {
   if (r.stopped) {
     // 이번 실행에서 blocked/error 발생 → 그 상태를 정본에 기록하고 중단
     await callAgent('spec-harness:recorder', null,
-      recorderPrompt(a, { step: r.step }, r.stopped, r.summary || '', r.reason),
+      recorderPrompt(a, { step: r.step }, r.stopped, r.summary || '', r.reason, r.history),
       `step${r.step}:recorder`, 'Implement');
     stopped = r;
     break;

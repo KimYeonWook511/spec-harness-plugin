@@ -125,6 +125,7 @@ flowchart TD
 | --- | --- |
 | 📖 **skill `guide`** | 안내(`/spec-harness:guide`). 사용자가 겪을 흐름 — 개입 지점, 자동 구간, 막혔을 때 할 일 |
 | 🎬 **skill `run`** | 진입점(`/spec-harness:run`). 10단계를 지휘한다. 상세 동작·데이터 계약의 정본 |
+| 🔁 **skill `retro`** | 회고(`/spec-harness:retro`). 끝난 spec들의 실행 기록에서 반복되는 실패를 찾아 규칙으로 고친다. 10 Stage 밖이다 |
 | ⚙️ **workflow `execute`** | 실행 오케스트레이터(`/spec-harness:execute`). step마다 구현→검증→검토→커밋→기록 |
 | 🔍 **검사관 6인** | `analyzer-traceability`·`-domain`·`-concurrency`·`-access`·`-rules`·`-clarity` |
 | 🤖 **실행 에이전트** | `developer`·`reviewer`·`committer`·`recorder`·`finalizer` |
@@ -352,6 +353,7 @@ cat ~/.claude/settings.json .claude/settings.json .claude/settings.local.json
 - 안내: `/spec-harness:guide` — 전체 흐름과 내가 개입할 지점
 - 진입: `/spec-harness:run`
 - 실행 워크플로: `/spec-harness:execute`
+- 회고: `/spec-harness:retro`
 
 ---
 
@@ -462,11 +464,12 @@ docs/specs/**/phases/*/logs/
 | `analysis.json` | 메인(검사관 리포트 병합) | `close-analyze` · `preflight` · Root Sync 승격 |
 | `phases/<phase>/step<N>.md` | Steps(6) | developer · reviewer · `lint-steps` |
 | `workflow-checklist.json` | 각 단계 · `close-analyze` · `set-stage` | `preflight` · 머지 검사 hook |
-| `phases/**/index.json` | recorder · finalizer | preflight · 재실행 skip 판단 |
+| `phases/**/index.json` | recorder(시도 이력 포함) · finalizer | preflight · 재실행 skip 판단 |
 | `step<N>-ac-output.json` | `verify-ac`(시도마다 누적) | reviewer(자기보고 대조) |
+| `execution-history.json` | `export-history`(Root Sync 직전) | `retro` |
 | `logs/<role>.log` | 로깅 hook | 사람(사후 분석) |
 
-- **`_archive`로 옮기는 것**: 모든 `.md`와 `analysis.json`. 무엇을 발견하고 왜 그렇게 처리했는지가 나중에 되짚을 유일한 근거다.
+- **`_archive`로 옮기는 것**: 모든 `.md`와 `analysis.json`·`execution-history.json`. 무엇을 발견하고 어떻게 처리했는지, 실행이 어디서 몇 번 되돌아갔는지를 나중에 되짚을 근거다.
 - **함께 사라지는 것**: 진행 상태(`index.json`·checklist)와 실행 부산물(`ac-output`·`logs`). 추적되지 않아 작업 폴더를 비울 때 없어진다.
 - 타임스탬프는 KST(+09:00).
 

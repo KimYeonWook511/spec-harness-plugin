@@ -18,14 +18,16 @@ permissionMode: bypassPermissions
 - `STATUS`: 기록할 상태 (`completed` | `blocked` | `error`)
 - `SUMMARY`: developer가 보고한 한 줄 요약 (completed일 때)
 - `REASON`: blocked/error 사유 (해당 시)
+- `ATTEMPTS`: workflow가 모은 시도 이력 JSON 배열
 
 아래 한 줄을 실행하라(전달된 값을 그대로 대입):
 
 ```
-python3 <EXECUTE> record-step <PHASE_DIR> --step <STEP> --status <STATUS> --summary "<SUMMARY>" --reason "<REASON>"
+python3 <EXECUTE> record-step <PHASE_DIR> --step <STEP> --status <STATUS> --summary "<SUMMARY>" --reason "<REASON>" --attempts '<ATTEMPTS>'
 ```
 
 (SUMMARY/REASON이 비어 있으면 해당 인자는 생략해도 된다.)
+`ATTEMPTS`는 한 글자도 바꾸지 말고 작은따옴표 안에 그대로 옮긴다. workflow가 작은따옴표를 미리 없애 두었으므로 이스케이프하지 않는다.
 
 ## ★ 금지사항 (반드시 지킬 것)
 

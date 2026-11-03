@@ -124,7 +124,7 @@ developer→reviewer→committer→recorder 서브에이전트를 돌린 뒤 fin
 - `execute.py` 실행 전 반드시 사용자에게 진행 의사를 확인하고, 사용자가 진행을 승인한 뒤에만 실행한다(가벼운 확인 — 별도 Plan Mode·`ExitPlanMode` 절차는 거치지 않는다). 이 게이트는 스크립트가 막지 않으므로 메인 에이전트가 지킨다.
 - Stage 8(Execution)에서 연 PR은 **Root Sync(10)가 끝나기 전에 머지하지 않는다.** 먼저 머지되면 루트 문서 갱신과 `_archive` 승격이 날아간다.
 - Stage 8(Execution)에서 PR을 연 뒤 메인 에이전트는 멈추고 사용자의 PR Review(9) 검토 완료 신호를 기다린다. "리뷰 코멘트가 아직 없음"은 PR Review 완료가 아니다. PR Review 완료가 확인되기 전에는 Root Sync(10)에 착수하지 않는다.
-- Stage 10(Root Sync)는 두 가지를 한다. (1) 루트 문서 갱신 — ADR=append, 스냅샷(architecture/db-schema/api-spec)=overwrite로 동작이 다르다. (2) `_archive` 승격 — Stage 8에서 커밋해 둔 spec 정본을 `<SPEC_ROOT>/_archive/pr-<번호>-<spec명>/`로 옮겨 같은 PR에 커밋한다(진행 상태·실행 부산물은 추적되지 않아 함께 사라진다). 한 지시로 뭉치지 않는다(아래 Stage 8 참고).
+- Stage 10(Root Sync)는 두 가지를 한다. (1) 루트 문서 갱신 — ADR=append, 스냅샷(architecture/db-schema/api-spec)=overwrite로 동작이 다르다. (2) `_archive` 승격 — 실행 이력을 `execution-history.json`으로 내보낸 뒤, Stage 8에서 커밋해 둔 spec 정본과 함께 `<SPEC_ROOT>/_archive/pr-<번호>-<spec명>/`로 옮겨 같은 PR에 커밋한다(진행 상태·실행 부산물은 추적되지 않아 함께 사라진다). 한 지시로 뭉치지 않는다(아래 Stage 8 참고).
 
 ---
 
@@ -839,10 +839,17 @@ review 처리 방식:
 
 위 루트 동기화와 **별개로**, 이 spec의 작업 기록을 영구 보존한다.
 
+- **실행 이력 내보내기** (옮기기 전에): 시도 이력은 진행 상태 파일에만 있어 옮기면 사라진다. 먼저 한 파일로 모아 스테이징한다. 스테이징한 파일은 아래 `git mv`가 함께 옮긴다.
+
+  ```bash
+  python3 "<SKILL_DIR>/scripts/execute.py" export-history <SPEC_ROOT>/<spec-name>
+  git add <SPEC_ROOT>/<spec-name>/execution-history.json
+  ```
+
 - **`_archive` 승격**: Stage 8에서 커밋해 둔 spec 정본을 `<SPEC_ROOT>/_archive/pr-<PR번호>-<spec명>/`로 **옮긴다**(`git mv`). 작업 폴더는 그 자리에서 사라지고, 머지된 트리에는 `_archive` 사본만 남는다. PR 번호는 Stage 8에서 PR을 열 때 이미 정해져 있다.
   - **복사가 아니라 옮기는 이유**: 같은 내용이 두 경로에 남으면 어느 쪽이 정본인지 흐려지고, 나중에 한쪽만 고쳐지면 갈라진다. `_archive`는 끝난 작업이 가는 곳이므로 작업 폴더가 거기로 들어가는 것이 맞다.
   - **옮기지 않는 것**: 진행 상태·실행 부산물 — `phases/index.json`, `phases/<phase>/index.json`, `workflow-checklist.json`, `step<N>-ac-output.json`, `logs/`. `.gitignore` 대상이라 애초에 추적되지 않으며, 작업 폴더를 비울 때 함께 사라진다.
-  - **승격 대상**: 그 밖의 **모든 `.md`**와 `analysis.json`. `.md` 목록을 열거하지 않는 이유는, 열거하면 새 문서가 생길 때 조용히 빠지기 때문이다. 실제로는 `spec.md`·`plan.md`·`scenarios.md`·`data-model.md`·`architecture.md`·`db-schema.md`·`api-spec.md`·`adr.md`·`interview.md`·`research.md`와 `phases/<phase>/step<N>.md` 중 작성된 것이 해당한다.
+  - **승격 대상**: 그 밖의 **모든 `.md`**와 `analysis.json`·`execution-history.json`. `.md` 목록을 열거하지 않는 이유는, 열거하면 새 문서가 생길 때 조용히 빠지기 때문이다. 실제로는 `spec.md`·`plan.md`·`scenarios.md`·`data-model.md`·`architecture.md`·`db-schema.md`·`api-spec.md`·`adr.md`·`interview.md`·`research.md`와 `phases/<phase>/step<N>.md` 중 작성된 것이 해당한다.
   - **`scenarios.md`·`data-model.md`를 빠뜨리면 안 된다** — 동결된 계약과 상태 전이 정본이다. 작업 폴더는 이 단계에서 비워지므로, 옮기지 않으면 step 문서의 `## 검증 대상`이 가리키는 시나리오 식별자가 존재하지 않는 문서를 향하게 된다.
   - 옮기기만 한다. 내용을 재작성하지 않는다. 루트 ADR append는 위에서 이미 했으므로, `_archive`의 `adr.md`는 "이 spec이 그 결정에 어떻게 도달했나"의 맥락 기록이다.
 
@@ -854,4 +861,4 @@ sync 후 agent는 변경 요약(루트 문서 중 무엇을 갱신·보존했는
 
 **merge는 이 워크플로의 단계가 아니다** — 누가 어떤 형식으로 머지하는지는 저장소가 자기 규칙으로 정한다. agent가 Bash로 내는 머지 명령은 `merge-hook`이 가로채 판정한다(위 "게이트" 표).
 
-작업 회고·지식 축적이 필요하면 harness 바깥에서 별도로 처리한다(이 워크플로의 책임이 아니다).
+회고는 이 워크플로의 단계가 아니다. 끝난 spec들의 기록을 돌아보려면 `retro` skill(`/spec-harness:retro`)을 쓴다.

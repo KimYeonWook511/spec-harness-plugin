@@ -28,6 +28,7 @@ SKILL.md의 흐름을 이해한 뒤, 구체 스펙이 필요할 때 이 문서�
 ├── interview.md                    # 인터뷰 기록 (Specify가 작업 공간을 만들 때 옮겨온 것)
 ├── research.md                     # (선택) 기술 선택 조사 — 새 의존성·미해결 선택 시만
 ├── workflow-checklist.json         # spec 레벨: Stage 진행 추적 + 실행 전 게이트(preflight가 검사)
+├── execution-history.json          # Root Sync 직전 export-history가 만드는 실행 이력 (회고 재료)
 └── phases/
     ├── index.json                  # spec 레벨: phase 목록과 각 phase status
     └── <phase>/                    # 예: 1-main (단일) / 1-domain, 2-api (복수). 순번은 항상 1부터
@@ -77,6 +78,30 @@ spec 문서가 이번 작업의 구체 결정, 루트 문서가 전역 원칙이
   `blocked`/`error`로 멈춘 step은 자동 재개하지 않는다. 사람이 원인을 고친 뒤
   `execute.py reset-step <PHASE_DIR> --step N`으로 그 step을 pending으로 되돌려야 재실행 시 다시 잡힌다.
   (안 고친 채 재실행해 같은 실패를 반복하며 토큰을 낭비하지 않도록, reset을 명시적 신호로 요구한다.)
+- `runs`: step이 끝날 때마다(`completed`·`blocked`·`error`) recorder가 한 칸씩 덧붙이는 실행 이력. `reset-step`은 지우지 않으므로 중단 뒤 재실행한 step은 칸이 둘 이상이다.
+
+  ```json
+  "runs": [
+    {
+      "status": "completed",
+      "recorded_at": "2026-06-16T...",
+      "attempts": [
+        { "attempt": 1, "outcome": "review_retry", "detail": "<reviewer 지적>", "struggles": null },
+        { "attempt": 2, "outcome": "approved", "detail": null, "struggles": "<ADR 충돌 처리>" }
+      ]
+    }
+  ]
+  ```
+
+  | `outcome` | 뜻 |
+  | --- | --- |
+  | `approved` | reviewer 승인 |
+  | `ac_failed` | AC 명령이 기대 exit code와 달랐다 (`detail`이 실패 명령) |
+  | `review_retry` | reviewer가 구체적 결함을 짚어 되돌렸다 (`detail`이 그 지적) |
+  | `review_blocked` · `developer_blocked` · `developer_error` | 사람 판단이 필요해 멈췄다 |
+  | `developer_format` · `reviewer_format` | 반환 JSON 계약을 지키지 않았다 |
+
+  문자열은 workflow가 300자로 자른다. 멈춘 run에는 `reason`이, 이력 JSON이 깨졌으면 `attempts_error`가 붙는다 — 이력은 회고 재료라 깨져도 상태 기록을 막지 않는다.
 - `execution`: agent별 모델과 push 여부. preflight가 이 값을 workflow 인자로 옮긴다.
   `push`는 `true`로 기록한다 — Execution은 PR 오픈으로 끝나고 PR은 push된 브랜치에만 열 수 있다.
   로컬에서만 돌려 볼 때는 index를 고치지 말고 finalize에 `--no-push`를 준다.
@@ -307,6 +332,7 @@ workflow(JS)는 각 agent의 반환 JSON으로 분기한다. agent는 **마지�
 ```json
 { "ok": true, "step": 1, "status": "completed" }
 ```
+- 이력 JSON이 깨졌으면 `"warning"`이 붙는다. `ok`는 그대로 `true`다.
 
 ### finalizer (stdout JSON)
 ```json
@@ -324,15 +350,16 @@ workflow(JS)는 각 agent의 반환 JSON으로 분기한다. agent는 **마지�
 **`<SPEC_ROOT>/<spec-name>/` 아래에서 `.gitignore` 대상은 진행 상태·실행 부산물뿐이다.** spec 정본은 Stage 8 진입 때 한 번 커밋되고, Root Sync(10)에서 `_archive/pr-<번호>-<spec명>/`로 옮겨진다. 그 사이 as-built 수정은 그것을 만든 step 커밋에 함께 들어간다.
 
 - **함께 사라지는 것**: `index.json`·`workflow-checklist.json`(진행 상태), `step<N>-ac-output.json`·`logs/`(실행 부산물). 추적되지 않아 작업 폴더를 비울 때 없어진다.
-- **`_archive`로 옮기는 것**: 그 밖의 모든 `.md` — `spec.md`·`plan.md`·`architecture.md`·`data-model.md`·`db-schema.md`·`api-spec.md`·`adr.md`·`scenarios.md`·`interview.md`·`research.md`·`step<N>.md` 중 작성된 것. 그리고 `analysis.json` — 무엇을 발견하고 왜 그렇게 처리했는지를 나중에 되짚을 유일한 근거다.
+- **`_archive`로 옮기는 것**: 그 밖의 모든 `.md` — `spec.md`·`plan.md`·`architecture.md`·`data-model.md`·`db-schema.md`·`api-spec.md`·`adr.md`·`scenarios.md`·`interview.md`·`research.md`·`step<N>.md` 중 작성된 것. 그리고 `analysis.json` — 무엇을 발견하고 왜 그렇게 처리했는지를 나중에 되짚을 유일한 근거다. `execution-history.json` — 사라지는 phase index·ac-output에서 시도 이력만 모은 것으로, `retro` skill이 읽는다.
 
 보존 가치가 있는 결정·계약은 Root Sync에서 루트 문서로도 승격된다.
 
 | 파일 | 누가 쓰나 | 누가 읽나 |
 |---|---|---|
-| `phases/<phase>/index.json`, `phases/index.json` | recorder(step status) / finalizer(completed_at·spec index) | preflight·재실행 skip 판단 |
+| `phases/<phase>/index.json`, `phases/index.json` | recorder(step status·runs) / finalizer(completed_at·spec index) | preflight·재실행 skip 판단 · export-history |
 | spec 문서 (spec·plan·architecture·data-model·db-schema·api-spec·adr·scenarios) | developer/사람 | reviewer·Root Sync 승격 |
-| `stepN-ac-output.json` | verify-ac(attempt마다 append) | reviewer(자기보고 대조) |
+| `stepN-ac-output.json` | verify-ac(attempt마다 append) | reviewer(자기보고 대조) · export-history |
+| `execution-history.json` | export-history(Root Sync 직전) | retro |
 | `logs/<role>.log` | 로깅 hook | 사람(사후 분석·디버깅) |
 
 - developer/recorder/committer/finalizer는 자기 영역 밖의 정본을 건드리지 않는다.
