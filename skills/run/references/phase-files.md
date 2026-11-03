@@ -45,7 +45,7 @@ SKILL.md의 흐름을 이해한 뒤, 구체 스펙이 필요할 때 이 문서�
 
 > step 문서·phase index 골격도 템플릿 폴더에 있다(`step.md`·`phase-index.json`). 기계가 헤더 문자열로 파싱하므로 이 둘은 템플릿에서 복사해 쓴다.
 
-> spec 문서 템플릿과 `workflow-checklist.json` 골격은 템플릿 폴더에 있다(`SKILL.md`의 템플릿 폴더 설명 참고). checklist는 Specify(2)에서, 설계 문서는 Design(5)에서 필요한 것만 만든다.
+> spec 문서 템플릿은 템플릿 폴더에 있다(`SKILL.md`의 자리표시자 `<TEMPLATE_DIR>`). checklist는 Specify(2)에서 `init-checklist`로, 설계 문서는 Design(5)에서 필요한 것만 만든다.
 
 저장소의 루트 문서(ADR·규칙 문서 등)는 전역 베이스다.
 spec 문서가 이번 작업의 구체 결정, 루트 문서가 전역 원칙이다(충돌 시 spec 우선).
@@ -123,7 +123,7 @@ finalizer가 phase 완료 시 해당 phase status를 `completed`로 동기화한
 ### workflow-checklist.json (Stage 진행 + 실행 전 게이트)
 
 `harness` workflow의 10개 Stage 진행을 기록한다. **spec 레벨에 하나** 두며(`<spec>/workflow-checklist.json`, spec 폴더 바로 아래),
-Specify(2)에서 worktree를 만들 때 템플릿 폴더에서 복사해 만든다. 항목 제목은 `SKILL.md`의 Workflow 제목과 정확히 일치해야 한다.
+Specify(2)에서 `init-checklist`가 만든다. 단계 목록의 정본은 `<SKILL_DIR>/stages.json`이며, 저장소 템플릿으로 바꿀 수 없다 — 단계를 빼서 게이트를 여는 길을 막기 위해서다.
 
 ```json
 {
@@ -149,8 +149,8 @@ Specify(2)에서 worktree를 만들 때 템플릿 폴더에서 복사해 만든�
 즉 탐색·논의·설계·문서작성을 건너뛰고 곧바로 구현에 돌입하는 것을 기계적으로 막는다.
 
 필드 규칙:
-- `workflow`: 항상 `harness`
-- `items`: `SKILL.md`의 1~10번 Stage 순서·제목을 그대로 사용(order/title 일치 필수). `group`은 표시용이며 검증 대상이 아니다.
+- `workflow`: `stages.json`의 workflow 이름. run은 `harness`
+- `items`: `stages.json`의 단계 순서·제목과 일치해야 한다(order/title). `group`은 표시용이며 검증 대상이 아니다.
 - Stage 1~6은 진행하며 작성·갱신한다. Stage 7(Analyze)은 `close-analyze`만 `completed`로 만든다.
 - `Execution`(8)은 **메인이 Stage 8 자동 흐름으로 갱신**한다 — 진입 시 `set-stage … in_progress`, phase 루프를 다 돈 뒤 `set-stage … completed`를 자동 호출(spec 단위 1회씩). `PR Review`(9)·`Root Sync`(10)은 리뷰 결과·승격 완료를 사람이 확인한 시점에 `set-stage`로 갱신한다. preflight·finalize는 phase 단위라 이 Stage들을 건드리지 않는다(기계가 spec 레벨 Stage를 자기 판단으로 바꾸지 않는다).
 - 단 10은 9가 `completed`된 뒤에만 갱신한다(리뷰 코멘트 부재를 9 완료로 보지 않는다). Stage 10이 마지막이며, 이후 merge는 사람이 수동으로 한다.

@@ -1,0 +1,18 @@
+{
+  "harness": {
+    "stages": [
+      { "title": "Interview", "group": "명세" },
+      { "title": "Specify", "group": "명세" },
+      { "title": "Clarify", "group": "명세" },
+      { "title": "Scenarios", "group": "명세" },
+      { "title": "Design", "group": "명세" },
+      { "title": "Steps", "group": "변환·검증" },
+      { "title": "Analyze", "group": "변환·검증" },
+      { "title": "Execution", "group": "실행" },
+      { "title": "PR Review", "group": "실행" },
+      { "title": "Root Sync", "group": "실행" }
+    ],
+    "execution": "Execution",
+    "set_stage": ["Execution", "PR Review", "Root Sync"]
+  }
+}

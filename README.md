@@ -388,7 +388,7 @@ cat ~/.claude/settings.json .claude/settings.json .claude/settings.local.json
 - **`rule_docs`** — 구현 단계에서 **항상 주입**하는 규칙 문서. 문자열이면 문서 전문, 객체면 지정한 섹션만 넣는다. 섹션을 찾지 못하면 전문을 넣고 그 사실을 알림으로 남긴다(규칙이 조용히 빠지지 않게). 여기 넣은 설계 규약은 `analyzer-rules`의 판정 기준이 된다.
 - **`commit_rule_docs`** — 커밋 메시지·단위 규칙. 따로 두는 이유는 커밋 규칙이 커밋할 때만 필요하고, 커밋 담당 에이전트는 문서를 탐색할 도구가 없어 경로를 명시로 받아야 하기 때문이다.
 - **`reference_docs`** — step 문서가 그 경로를 언급할 때만 주입하는 참고 문서.
-- **`template_dir`** — spec 문서 템플릿을 저장소 것으로 쓰고 싶을 때만 지정한다. 없으면 플러그인 내장 템플릿을 쓰므로 준비 없이도 시작할 수 있다.
+- **`template_dir`** — spec 문서 템플릿을 저장소 것으로 쓰고 싶을 때만 지정한다. 없으면 플러그인 내장 템플릿을 쓰므로 준비 없이도 시작할 수 있다. 진행 checklist는 템플릿에서 오지 않는다 — 단계 정의는 플러그인의 `stages.json`만 가진다.
 - **`spec_root`** — spec 작업 공간이 사는 곳(기본 `docs/specs`).
 - **`methodologies`** — 켤 방법론 이름 목록. 여러 개를 함께 켤 수 있고, 비어 있으면 코어만 돈다.
 - **`merge.agent`** — agent가 내는 PR 머지 명령을 어떻게 다룰지: `ask`(기본) · `root_sync` · `deny`. 각 값의 뜻은 위 "Root Sync 전 머지 검사" 절에 있다.
@@ -463,7 +463,7 @@ docs/specs/**/phases/*/logs/
 | `spec.md`·`plan.md`·설계 문서·`scenarios.md` | 사람 · 메인 | 검사관 · developer · Root Sync 승격 |
 | `analysis.json` | 메인(검사관 리포트 병합) | `close-analyze` · `preflight` · Root Sync 승격 |
 | `phases/<phase>/step<N>.md` | Steps(6) | developer · reviewer · `lint-steps` |
-| `workflow-checklist.json` | 각 단계 · `close-analyze` · `set-stage` | `preflight` · 머지 검사 hook |
+| `workflow-checklist.json` | `init-checklist`(생성) · 각 단계 · `close-analyze` · `set-stage` | `preflight` · 머지 검사 hook |
 | `phases/**/index.json` | recorder(시도 이력 포함) · finalizer | preflight · 재실행 skip 판단 |
 | `step<N>-ac-output.json` | `verify-ac`(시도마다 누적) | reviewer(자기보고 대조) |
 | `execution-history.json` | `export-history`(Root Sync 직전) | `retro` |

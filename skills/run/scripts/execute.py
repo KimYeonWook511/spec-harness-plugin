@@ -13,6 +13,7 @@ JavaScript workflow(spec-harness:execute)로 옮겨갔고, execute.py는 **workf
   verify-ac       step의 Acceptance Criteria를 실행·판정(acceptance_check) → ac-output.json 누적 + 결과 JSON 출력
   record-step     phase index.json에 step.status/summary/completed_at과 시도 이력(runs) 기록 (recorder agent 전용)
   reset-step      blocked/error step을 pending으로 되돌림 (사람이 원인을 고친 뒤 재개용)
+  init-checklist  stages.json의 단계 정의로 spec 레벨 checklist 생성 (Specify에서 한 번)
   set-stage       spec 레벨 checklist의 Stage 8/9/10 상태 갱신 (메인의 Execution 자동 흐름 + PR Review/Root Sync — preflight·finalize는 안 건드림)
   finalize        phase 닫기: 이 phase의 completed_at·spec index 동기화(워킹트리) + 선택적 push (finalizer agent 전용)
   export-history  phase index·ac-output의 실행 이력을 execution-history.json으로 모음 (Root Sync에서 _archive로 옮기기 전)
@@ -68,74 +69,69 @@ def emit(payload: dict) -> None:
     sys.stdout.flush()
 
 
-# 세 묶음으로 읽는다: 명세(1~5, 사람 주도·끝에서 동결) → 변환·검증(6~7, 다시 만들어도 되는 산출물)
-# → 실행(8~10, 기계 구현 후 리뷰·루트 반영).
-_WORKFLOW_ITEMS = [
-    (1, "Interview"),
-    (2, "Specify"),
-    (3, "Clarify"),
-    (4, "Scenarios"),
-    (5, "Design"),
-    (6, "Steps"),
-    (7, "Analyze"),
-    (8, "Execution"),
-    (9, "PR Review"),
-    (10, "Root Sync"),
-]
-# 단계 목록은 여러 곳에 동기화돼야 한다(이 리스트 / 템플릿의 workflow-checklist.json /
-# SKILL.md 상태표·각 ### 헤더 / phase-files.md 예시 / 아래 게이트 경계).
-# 항목 개수는 len()으로 동적 처리되지만, 게이트 경계 리터럴(EXECUTION_ORDER)은 별도이므로 함께 갱신해야 한다.
+# 단계 목록의 정본. checklist의 `workflow` 값으로 고른다.
+# 플러그인만 이 정의를 가진다 — 저장소가 단계를 빼서 게이트를 여는 길을 막는다.
+STAGES_PATH = SCRIPT_DIR.parent / "stages.json"
 
-# Execution 단계의 order. 이 앞(1..EXECUTION_ORDER-1)은 모두 completed여야 실행 게이트를 통과한다.
-# 명세 묶음(Interview~Design)과 변환·검증 묶음(Steps·Analyze)이 모두 끝나야 실행에 들어간다.
-EXECUTION_ORDER = 8
+
+def load_stage_set(name) -> dict | None:
+    """workflow 이름의 단계 정의. stages: 순서대로의 단계, execution: 실행 게이트 단계,
+    set_stage: `set-stage`로 갱신할 수 있는 단계. 없는 이름이면 None."""
+    if not isinstance(name, str):
+        return None
+    found = read_json(STAGES_PATH).get(name)
+    return found if isinstance(found, dict) else None
 
 
 def validate_workflow_checklist(checklist_dir: Path) -> dict:
-    """실행 전 게이트: 문서 검토·실행 승인 완료 여부를 강제한다.
+    """실행 전 게이트: 실행 단계 앞의 모든 단계가 completed이고 실행 단계가 pending/in_progress여야 통과한다.
 
     checklist는 spec 레벨에 하나다(`<spec>/workflow-checklist.json`).
-    Execution(8) 직전 단계(1~7: Interview·Specify·Clarify·Scenarios·Design·Steps·Analyze)가
-    모두 completed이고 Execution(8)이 pending/in_progress여야 통과.
     통과하면 {"ok": True}, 아니면 {"ok": False, "error": ...}를 반환한다.
-    (게이트 미통과 시 preflight는 emit으로 알리고 종료한다.)
 
     참고: "Clarify 위험마커 0 + Analyze 통과"라는 의미 게이트는 별도 코드 검사가 아니라,
-    Clarify(3)·Analyze(7) 단계를 completed로 표시하는 행위가 그 조건의 충족을 뜻한다는 규약으로 강제한다
+    그 단계를 completed로 표시하는 행위가 조건의 충족을 뜻한다는 규약으로 강제한다
     (마커가 남았으면 Clarify를 completed로 두지 않고, Analyze가 실패하면 Analyze를 completed로 두지 않는다).
     """
     checklist_path = checklist_dir / "workflow-checklist.json"
     if not checklist_path.exists():
         return {"ok": False, "error": f"workflow-checklist.json 없음: {checklist_path}. "
-                "Stage 1~7(Interview~Analyze)을 마치고 실행 승인을 기록한 checklist를 만든 뒤 실행하라."}
+                "실행 단계 앞의 단계를 마치고 실행 승인을 기록한 checklist를 만든 뒤 실행하라."}
 
     checklist = read_json(checklist_path)
-    if checklist.get("workflow") != "harness":
-        return {"ok": False, "error": "workflow-checklist.json의 workflow가 'harness'가 아니다."}
+    name = checklist.get("workflow")
+    stage_set = load_stage_set(name)
+    if stage_set is None:
+        return {"ok": False, "error": f"workflow-checklist.json의 workflow '{name}'는 정의되지 않았다(stages.json)."}
+    expected = list(enumerate((s["title"] for s in stage_set["stages"]), start=1))
+    exec_title = stage_set.get("execution")
+    if not exec_title:
+        return {"ok": False, "error": f"'{name}' workflow에는 실행 단계가 없다."}
+    exec_order = next(o for o, t in expected if t == exec_title)
 
     items = checklist.get("items")
-    if not isinstance(items, list) or len(items) != len(_WORKFLOW_ITEMS):
-        return {"ok": False, "error": f"workflow-checklist.json은 {len(_WORKFLOW_ITEMS)}개 harness workflow 항목을 가져야 한다."}
+    if not isinstance(items, list) or len(items) != len(expected):
+        return {"ok": False, "error": f"workflow-checklist.json은 {len(expected)}개 {name} workflow 항목을 가져야 한다."}
 
     invalid, incomplete = [], []
-    for idx, (order, title) in enumerate(_WORKFLOW_ITEMS):
+    for idx, (order, title) in enumerate(expected):
         item = items[idx] if idx < len(items) else {}
         if not isinstance(item, dict) or item.get("order") != order or item.get("title") != title:
             invalid.append(f"{order}. {title}")
             continue
         status = item.get("status")
-        if order < EXECUTION_ORDER and status != "completed":
+        if order < exec_order and status != "completed":
             incomplete.append(title)
-        if order == EXECUTION_ORDER and status not in {"pending", "in_progress"}:
+        if order == exec_order and status not in {"pending", "in_progress"}:
             invalid.append(f"{order}. {title} status must be pending or in_progress")
 
     if invalid:
         return {"ok": False, "error": "workflow-checklist.json 항목이 올바르지 않다.", "invalid": invalid}
     observed = {it.get("order") for it in items if isinstance(it, dict)}
-    if {o for o, _ in _WORKFLOW_ITEMS} != observed:
+    if {o for o, _ in expected} != observed:
         return {"ok": False, "error": "workflow-checklist.json에 누락/중복된 order가 있다."}
     if incomplete:
-        return {"ok": False, "error": "harness workflow가 실행 승인되지 않았다(Execution 직전 단계 미완).", "incomplete": incomplete}
+        return {"ok": False, "error": f"{name} workflow가 실행 승인되지 않았다({exec_title} 직전 단계 미완).", "incomplete": incomplete}
     return {"ok": True}
 
 
@@ -522,6 +518,27 @@ def cmd_reset_step(args) -> int:
     return 0
 
 
+def cmd_init_checklist(args) -> int:
+    """spec 레벨 checklist를 stages.json의 단계 정의로 만든다. 이미 있으면 그대로 둔다."""
+    spec_dir = Path(args.spec_dir).resolve()
+    path = spec_dir / "workflow-checklist.json"
+    if path.exists():
+        emit({"ok": True, "path": str(path), "created": False})
+        return 0
+    stage_set = load_stage_set(args.workflow)
+    if stage_set is None:
+        emit({"ok": False, "error": f"workflow '{args.workflow}'는 정의되지 않았다(stages.json)."})
+        return 1
+    items = [
+        {"order": i, "group": s.get("group", ""), "title": s["title"], "status": "pending"}
+        for i, s in enumerate(stage_set["stages"], start=1)
+    ]
+    spec_dir.mkdir(parents=True, exist_ok=True)
+    write_json(path, {"workflow": args.workflow, "status": "drafting", "items": items})
+    emit({"ok": True, "path": str(path), "created": True, "stages": len(items)})
+    return 0
+
+
 def cmd_set_stage(args) -> int:
     """spec 레벨 checklist의 한 Stage 상태를 갱신한다.
 
@@ -533,16 +550,25 @@ def cmd_set_stage(args) -> int:
       - Stage 9/10(PR Review/Root Sync): 리뷰·승격 등 사람 판단 시점에 같은 방식으로 갱신한다.
     """
     checklist_dir = Path(args.checklist_dir).resolve()
-    # Stage 1~7을 이 명령으로 찍으면 그 앞 게이트가 근거 없이 열린다.
-    allowed = {title for order, title in _WORKFLOW_ITEMS if order >= EXECUTION_ORDER}
+    not_found = {"ok": False, "error": f"checklist에서 '{args.stage}' 항목을 찾지 못했다(경로: {checklist_dir}). "
+                 "checklist_dir는 spec 디렉터리(workflow-checklist.json이 있는 spec 루트)여야 하고 stage는 정확한 Stage 제목이어야 한다."}
+    checklist_path = checklist_dir / "workflow-checklist.json"
+    if not checklist_path.exists():
+        emit(not_found)
+        return 1
+    name = read_json(checklist_path).get("workflow")
+    stage_set = load_stage_set(name)
+    if stage_set is None:
+        emit({"ok": False, "error": f"workflow-checklist.json의 workflow '{name}'는 정의되지 않았다(stages.json)."})
+        return 1
+    # 실행 단계 앞을 이 명령으로 찍으면 그 앞 게이트가 근거 없이 열린다.
+    allowed = set(stage_set.get("set_stage", []))
     if args.stage not in allowed:
         emit({"ok": False, "error": f"set-stage로 갱신할 수 있는 Stage는 {sorted(allowed)}뿐이다. "
               f"'{args.stage}'는 진행하며 작성·갱신하는 단계다."})
         return 1
-    matched = update_workflow_item(checklist_dir, args.stage, args.status)
-    if not matched:
-        emit({"ok": False, "error": f"checklist에서 '{args.stage}' 항목을 찾지 못했다(경로: {checklist_dir}). "
-              "checklist_dir는 spec 디렉터리(workflow-checklist.json이 있는 spec 루트)여야 하고 stage는 정확한 Stage 제목이어야 한다."})
+    if not update_workflow_item(checklist_dir, args.stage, args.status):
+        emit(not_found)
         return 1
     emit({"ok": True, "stage": args.stage, "status": args.status})
     return 0
@@ -799,6 +825,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_reset.add_argument("phase_dir")
     p_reset.add_argument("--step", type=int, required=True)
     p_reset.set_defaults(func=cmd_reset_step)
+
+    p_init = sub.add_parser("init-checklist", help="stages.json의 단계 정의로 spec 레벨 checklist 생성")
+    p_init.add_argument("spec_dir", help="spec 디렉터리")
+    p_init.add_argument("--workflow", default="harness", help="stages.json의 workflow 이름")
+    p_init.set_defaults(func=cmd_init_checklist)
 
     p_stage = sub.add_parser("set-stage", help="spec 레벨 checklist의 Stage 상태 갱신(메인의 Execution 자동 흐름 + PR Review/Root Sync)")
     p_stage.add_argument("checklist_dir", help="spec 디렉터리(workflow-checklist.json이 있는 spec 루트)")

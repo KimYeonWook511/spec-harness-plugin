@@ -118,7 +118,7 @@ developer→reviewer→committer→recorder 서브에이전트를 돌린 뒤 fin
 - 이 skill을 사용하는 작업에서는 `phases`가 준비된 이후의 기본 구현 경로를 수동 파일 수정이 아니라 `execute.py` 실행으로 본다.
 - 사용자가 명시적으로 `execute.py`를 쓰지 말라고 하지 않은 이상, agent가 직접 구현을 시작하면 안 된다.
 - `Implement the plan`은 자동으로 직접 구현을 뜻하지 않는다. `phases` 준비 여부와 실행 승인 여부를 먼저 확인해야 한다.
-- Workflow는 spec 레벨 `workflow-checklist.json`(spec 폴더 바로 아래) 하나로 10개 Stage를 추적하며, 다음 Stage로 넘어가기 전 이전 Stage가 모두 `completed`여야 한다. 이 checklist는 Specify(2)에서 worktree를 만들 때 템플릿의 `workflow-checklist.json`을 복사해 생성한다.
+- Workflow는 spec 레벨 `workflow-checklist.json`(spec 폴더 바로 아래) 하나로 10개 Stage를 추적하며, 다음 Stage로 넘어가기 전 이전 Stage가 모두 `completed`여야 한다. 이 checklist는 Specify(2)에서 `execute.py init-checklist`로 생성한다.
 - `harness` 진행 상태를 사용자에게 보고할 때는 1~10번 Workflow 상태 표를 함께 보여준다.
 - `Analyze`(7) 통과 후에는 반드시 멈추고 작성된 문서 경로를 사용자에게 보고한 뒤 검토 응답을 기다린다. 바로 `execute.py` 실행 요청으로 넘어가지 않는다.
 - `execute.py` 실행 전 반드시 사용자에게 진행 의사를 확인하고, 사용자가 진행을 승인한 뒤에만 실행한다(가벼운 확인 — 별도 Plan Mode·`ExitPlanMode` 절차는 거치지 않는다). 이 게이트는 스크립트가 막지 않으므로 메인 에이전트가 지킨다.
