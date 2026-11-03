@@ -29,6 +29,8 @@ DEFAULTS: dict = {
     "template_dir": None,
     # spec 작업 공간이 사는 곳(저장소 루트 기준). 하네스가 spec 폴더를 만들고 찾는 기준점이다.
     "spec_root": "docs/specs",
+    # 기능 spec이 사는 곳(docs 저장소 루트 기준). feature skill이 쓴다.
+    "feature_root": "features",
     # 이 저장소가 켠 방법론 이름 목록(예: ["ddd"]). 비어 있으면 방법론 무관 코어만 돈다.
     # 방법론은 검사·요구 산출물·전용 agent를 더하며, 코어 게이트를 끄지는 못한다.
     "methodologies": [],

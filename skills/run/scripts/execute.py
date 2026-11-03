@@ -19,6 +19,8 @@ JavaScript workflow(spec-harness:execute)로 옮겨갔고, execute.py는 **workf
   export-history  phase index·ac-output의 실행 이력을 execution-history.json으로 모음 (Root Sync에서 _archive로 옮기기 전)
   lint-steps      step 문서의 Acceptance Criteria 파싱 계약 검사 (실행하지 않고 형식만)
   close-analyze   analysis.json의 CRITICAL 처리·step 형식을 확인하고 Analyze(7)를 닫음 + fingerprint 기록
+  close-review    stages.json에 정의된 검사 단계를 확인하고 닫음 + fingerprint 기록
+  freeze          기능 spec 동결 조건 확인, --tag면 버전 태그 생성
 
 설계 원칙:
   - 함수 기반: 셔틀 상태가 없고 각 서브커맨드가 한 번 실행되고 끝이므로 클래스가 불필요.
@@ -75,8 +77,12 @@ STAGES_PATH = SCRIPT_DIR.parent / "stages.json"
 
 
 def load_stage_set(name) -> dict | None:
-    """workflow 이름의 단계 정의. stages: 순서대로의 단계, execution: 실행 게이트 단계,
-    set_stage: `set-stage`로 갱신할 수 있는 단계. 없는 이름이면 None."""
+    """workflow 이름의 단계 정의. 없는 이름이면 None.
+
+    stages: 순서대로의 단계 / execution: 실행 게이트 단계 / set_stage: `set-stage`로 갱신할 수 있는 단계
+    reviews: 검사 단계별 결과 파일·판정 대상 문서(`/`로 시작하면 저장소 루트 기준)·앞 검사 이후 바뀌면 안 되는 문서
+    frozen_docs: 동결 대상 문서. 바뀌면 major 버전이어야 한다
+    """
     if not isinstance(name, str):
         return None
     found = read_json(STAGES_PATH).get(name)
@@ -731,6 +737,21 @@ def cmd_lint_steps(args) -> int:
     return 0
 
 
+def unresolved_critical(findings: list) -> list[dict]:
+    """근거를 적은 반려가 아닌 CRITICAL. `fixed`는 의사일 뿐이라 해소로 치지 않는다."""
+    unresolved = []
+    for finding in findings:
+        if not isinstance(finding, dict) or finding.get("severity") != "CRITICAL":
+            continue
+        disposition = finding.get("disposition")
+        kind = disposition.get("kind") if isinstance(disposition, dict) else None
+        reason = str(disposition.get("reason") or "").strip() if isinstance(disposition, dict) else ""
+        if kind != "rejected" or not reason:
+            unresolved.append({"id": finding.get("id"), "summary": finding.get("summary"),
+                               "disposition": kind})
+    return unresolved
+
+
 def cmd_close_analyze(args) -> int:
     """Analyze(7)를 닫는다.
 
@@ -756,16 +777,7 @@ def cmd_close_analyze(args) -> int:
         emit({"ok": False, "error": "analysis.json의 findings가 목록이 아니다."})
         return 1
 
-    unresolved = []
-    for finding in findings:
-        if not isinstance(finding, dict) or finding.get("severity") != "CRITICAL":
-            continue
-        disposition = finding.get("disposition")
-        kind = disposition.get("kind") if isinstance(disposition, dict) else None
-        reason = str(disposition.get("reason") or "").strip() if isinstance(disposition, dict) else ""
-        if kind != "rejected" or not reason:
-            unresolved.append({"id": finding.get("id"), "summary": finding.get("summary"),
-                               "disposition": kind})
+    unresolved = unresolved_critical(findings)
     if unresolved:
         emit({"ok": False, "error": "CRITICAL이 남아 Analyze를 닫을 수 없다. 근거를 적은 반려만 통과한다.",
               "hint": "고쳤다면 다시 분석해 그 발견이 사라진 것을 확인하라.",
@@ -787,6 +799,218 @@ def cmd_close_analyze(args) -> int:
         return 1
     emit({"ok": True, "stage": "Analyze", "status": "completed",
           "fingerprint_files": len(analysis["fingerprint"])})
+    return 0
+
+
+def git_toplevel(start: Path) -> Path | None:
+    r = git_ops.run_git(str(start), "rev-parse", "--show-toplevel")
+    return Path(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip() else None
+
+
+def doc_fingerprint(base: Path, root: Path, patterns: list[str]) -> dict:
+    """패턴에 걸리는 문서들의 내용 해시. `/`로 시작하는 패턴은 저장소 루트 기준, 나머지는 base 기준이다."""
+    digest = {}
+    for pat in patterns:
+        anchor, rel = (root, pat[1:]) if pat.startswith("/") else (base, pat)
+        for path in sorted(anchor.glob(rel)):
+            if path.is_file():
+                key = ("/" + path.relative_to(root).as_posix()) if pat.startswith("/") else path.relative_to(base).as_posix()
+                digest[key] = hashlib.sha256(path.read_bytes()).hexdigest()[:12]
+    return digest
+
+
+def changed_keys(recorded: dict, current: dict) -> list[str]:
+    return sorted((set(recorded) ^ set(current)) | {k for k in set(recorded) & set(current) if recorded[k] != current[k]})
+
+
+def load_spec_checklist(spec_dir: Path) -> tuple[dict | None, dict | None, str | None]:
+    """(checklist, 단계 정의, 오류). 오류가 있으면 앞의 둘은 None이다."""
+    path = spec_dir / "workflow-checklist.json"
+    if not path.exists():
+        return None, None, f"workflow-checklist.json 없음: {spec_dir}"
+    checklist = read_json(path)
+    stage_set = load_stage_set(checklist.get("workflow"))
+    if stage_set is None:
+        return None, None, f"workflow '{checklist.get('workflow')}'는 정의되지 않았다(stages.json)."
+    return checklist, stage_set, None
+
+
+def incomplete_before(checklist: dict, stage_set: dict, title: str) -> list[str]:
+    titles = [s["title"] for s in stage_set["stages"]]
+    status = {it.get("title"): it.get("status") for it in checklist.get("items", []) if isinstance(it, dict)}
+    return [t for t in titles[:titles.index(title)] if status.get(t) != "completed"]
+
+
+def cmd_close_review(args) -> int:
+    """검사 단계를 닫는다. 검사 정의(결과 파일·판정 대상 문서·앞 검사 이후 바뀌면 안 되는 문서)는 stages.json에 있다.
+
+    CRITICAL은 근거를 적은 반려만 통과한다. 닫으면서 판정 대상 문서의 지문을 결과 파일에 남긴다.
+    """
+    spec_dir = Path(args.spec_dir).resolve()
+    checklist, stage_set, err = load_spec_checklist(spec_dir)
+    if err:
+        emit({"ok": False, "error": err})
+        return 1
+    review = stage_set.get("reviews", {}).get(args.stage)
+    if review is None:
+        emit({"ok": False, "error": f"'{args.stage}'는 이 workflow의 검사 단계가 아니다.",
+              "reviews": sorted(stage_set.get("reviews", {}))})
+        return 1
+    pending = incomplete_before(checklist, stage_set, args.stage)
+    if pending:
+        emit({"ok": False, "error": f"'{args.stage}' 앞 단계가 끝나지 않았다.", "incomplete": pending})
+        return 1
+    root = git_toplevel(spec_dir) or spec_dir
+
+    result_path = spec_dir / review["file"]
+    if not result_path.exists():
+        emit({"ok": False, "error": f"{review['file']}이 없다.",
+              "hint": "검사관 리포트의 JSON 블록을 모아 저장한 뒤 다시 실행하라."})
+        return 1
+    result = read_json(result_path)
+    findings = result.get("findings")
+    if not isinstance(findings, list):
+        emit({"ok": False, "error": f"{review['file']}의 findings가 목록이 아니다."})
+        return 1
+    unresolved = unresolved_critical(findings)
+    if unresolved:
+        emit({"ok": False, "error": f"CRITICAL이 남아 '{args.stage}'를 닫을 수 없다. 근거를 적은 반려만 통과한다.",
+              "hint": "고쳤다면 다시 검사해 그 발견이 사라진 것을 확인하라.", "unresolved": unresolved})
+        return 1
+
+    # 앞 검사가 본 문서가 그 뒤 바뀌었으면 앞 검사부터 다시 돌아야 한다.
+    for prev, docs in review.get("unchanged_since", {}).items():
+        prev_path = spec_dir / stage_set["reviews"][prev]["file"]
+        recorded = read_json(prev_path).get("fingerprint", {}) if prev_path.exists() else {}
+        changed = changed_keys({k: v for k, v in recorded.items() if k in docs},
+                               doc_fingerprint(spec_dir, root, docs))
+        if changed:
+            emit({"ok": False, "error": f"'{prev}'를 닫은 뒤 바뀐 문서가 있다. 바뀐 문서로 '{prev}'를 다시 돌려 닫아라.",
+                  "changed": changed})
+            return 1
+
+    result["closed_at"] = stamp()
+    result["fingerprint"] = doc_fingerprint(spec_dir, root, review["docs"])
+    write_json(result_path, result)
+    if not update_workflow_item(spec_dir, args.stage, "completed"):
+        emit({"ok": False, "error": f"checklist에서 '{args.stage}' 항목을 찾지 못했다."})
+        return 1
+    emit({"ok": True, "stage": args.stage, "status": "completed", "fingerprint_files": len(result["fingerprint"])})
+    return 0
+
+
+_VERSION_RE = re.compile(r"^(F\d+)-v(\d+)(?:\.(\d+))?$")
+
+
+def _parse_version(tag: str):
+    m = _VERSION_RE.match(tag)
+    return (m.group(1), int(m.group(2)), int(m.group(3) or 0)) if m else None
+
+
+def freeze_problems(spec_dir: Path, root: Path, stage_set: dict, version: str) -> list[str]:
+    """동결해도 되는지. 문제가 없으면 빈 목록."""
+    problems = []
+    parsed = _parse_version(version)
+    if parsed is None:
+        return [f"버전 형식이 아니다: {version} (예: F01-v1, F01-v1.1)"]
+    fid, major, minor = parsed
+    if not spec_dir.name.startswith(fid + "-"):
+        problems.append(f"버전의 기능 번호({fid})가 폴더 이름({spec_dir.name})과 다르다.")
+
+    reviews = stage_set.get("reviews", {})
+    for title, review in reviews.items():
+        path = spec_dir / review["file"]
+        recorded = read_json(path).get("fingerprint") if path.exists() else None
+        if not recorded:
+            problems.append(f"'{title}'가 닫히지 않았다({review['file']}에 fingerprint 없음).")
+            continue
+        # 뒤 검사가 이어받은 검사는 뒤 검사가 지정한 문서만 본다. 나머지는 그 사이 단계가 바꾸는 게 정상이다.
+        inherited = [d for r in reviews.values() for d in r.get("unchanged_since", {}).get(title, [])]
+        docs = inherited or review["docs"]
+        if inherited:
+            recorded = {k: v for k, v in recorded.items() if k in inherited}
+        changed = changed_keys(recorded, doc_fingerprint(spec_dir, root, docs))
+        if changed:
+            problems.append(f"'{title}'를 닫은 뒤 바뀐 문서가 있다: {', '.join(changed)}")
+
+    changelog = root / "CHANGELOG.md"
+    if not changelog.exists() or not re.search(rf"^## {re.escape(version)}\b", changelog.read_text(encoding="utf-8"), re.M):
+        problems.append(f"CHANGELOG.md에 '## {version}' 항목이 없다.")
+    index = spec_dir.parent / "index.md"
+    if not index.exists() or not re.search(rf"^\|\s*{fid}\s*\|", index.read_text(encoding="utf-8"), re.M):
+        problems.append(f"기능 목록({index.relative_to(root) if index.is_relative_to(root) else index})에 {fid} 행이 없다.")
+
+    # 버전 규칙: 동결 문서의 뜻이 바뀌면 major, 그대로면 minor.
+    tags = [t for t in git_ops.run_git(str(root), "tag", "-l", f"{fid}-v*").stdout.split() if _parse_version(t)]
+    if git_ops.run_git(str(root), "rev-parse", "-q", "--verify", f"refs/tags/{version}").returncode == 0:
+        problems.append(f"태그 {version}가 이미 있다.")
+    if not tags:
+        if (major, minor) != (1, 0):
+            problems.append(f"첫 동결은 {fid}-v1이어야 한다.")
+    else:
+        latest = max(tags, key=lambda t: _parse_version(t)[1:])
+        lmaj, lmin = _parse_version(latest)[1:]
+        frozen = [(spec_dir / d).relative_to(root).as_posix() for d in stage_set.get("frozen_docs", [])]
+        meaning_changed = git_ops.run_git(str(root), "diff", "--quiet", latest, "--", *frozen).returncode != 0
+        if (major, minor) == (lmaj + 1, 0):
+            pass
+        elif major == lmaj and minor == lmin + 1:
+            if meaning_changed:
+                problems.append(f"{latest} 이후 {', '.join(stage_set.get('frozen_docs', []))} 중 바뀐 것이 있어 "
+                                f"{fid}-v{lmaj + 1}이어야 한다.")
+        else:
+            problems.append(f"{latest} 다음 버전은 {fid}-v{lmaj}.{lmin + 1}(동결 문서 그대로) 또는 {fid}-v{lmaj + 1}이다.")
+    return problems
+
+
+def cmd_freeze(args) -> int:
+    """기능 spec을 동결한다. --tag 없이는 확인만 하고, 머지한 뒤 --tag로 태그를 찍는다.
+
+    태그는 이 명령으로만 찍는다 — 검사가 닫혔고 그 뒤 문서가 바뀌지 않았을 때만 찍기 위해서다.
+    """
+    spec_dir = Path(args.spec_dir).resolve()
+    root = git_toplevel(spec_dir)
+    if root is None:
+        emit({"ok": False, "error": f"git 저장소 안이 아니다: {spec_dir}"})
+        return 1
+    checklist, stage_set, err = load_spec_checklist(spec_dir)
+    if stage_set is None:
+        # 머지한 뒤의 체크아웃에는 진행 상태 파일이 없다. 태그를 찍을 때는 기능 정의만 있으면 된다.
+        if not args.tag:
+            emit({"ok": False, "error": err})
+            return 1
+        stage_set = load_stage_set("feature")
+    if checklist is not None and not args.tag:
+        pending = incomplete_before(checklist, stage_set, "Freeze")
+        if pending:
+            emit({"ok": False, "error": "Freeze 앞 단계가 끝나지 않았다.", "incomplete": pending})
+            return 1
+
+    problems = freeze_problems(spec_dir, root, stage_set, args.version)
+    if args.tag:
+        dirty = git_ops.run_git(str(root), "status", "--porcelain").stdout.strip()
+        if dirty:
+            problems.append("작업 트리에 커밋되지 않은 변경이 있다. 머지된 커밋에 태그를 찍어야 한다.")
+    if problems:
+        emit({"ok": False, "error": "동결할 수 없다.", "problems": problems})
+        return 1
+
+    if not args.tag:
+        update_workflow_item(spec_dir, "Freeze", "in_progress")
+        emit({"ok": True, "version": args.version, "tagged": False,
+              "next": "PR을 올려 머지한 뒤, 머지된 체크아웃에서 --tag로 다시 실행한다."})
+        return 0
+
+    r = git_ops.run_git(str(root), "tag", "-a", args.version, "-m", args.version)
+    if r.returncode != 0:
+        emit({"ok": False, "error": f"태그를 만들지 못했다: {r.stderr.strip()}"})
+        return 1
+    if checklist is not None:
+        update_workflow_item(spec_dir, "Freeze", "completed")
+    head = git_ops.run_git(str(root), "rev-parse", "--short", "HEAD").stdout.strip()
+    branch = git_ops.run_git(str(root), "branch", "--show-current").stdout.strip()
+    emit({"ok": True, "version": args.version, "tagged": True, "commit": head, "branch": branch,
+          "next": f"원격에 올리려면 git push origin {args.version}"})
     return 0
 
 
@@ -849,6 +1073,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_lint = sub.add_parser("lint-steps", help="step 문서의 AC 파싱 계약 검사(실행하지 않음)")
     p_lint.add_argument("spec_dir", help="spec 디렉터리(phases/가 있는 spec 루트)")
     p_lint.set_defaults(func=cmd_lint_steps)
+
+    p_review = sub.add_parser("close-review", help="검사 단계를 확인하고 닫음(stages.json의 reviews)")
+    p_review.add_argument("spec_dir", help="checklist가 있는 디렉터리")
+    p_review.add_argument("--stage", required=True, help="검사 단계 제목")
+    p_review.set_defaults(func=cmd_close_review)
+
+    p_freeze = sub.add_parser("freeze", help="기능 spec 동결 확인, --tag면 태그 생성")
+    p_freeze.add_argument("spec_dir", help="기능 spec 디렉터리")
+    p_freeze.add_argument("--version", required=True, help="예: F01-v1, F01-v1.1")
+    p_freeze.add_argument("--tag", action="store_true", help="머지된 체크아웃에서 태그를 찍는다")
+    p_freeze.set_defaults(func=cmd_freeze)
 
     p_close = sub.add_parser("close-analyze", help="analysis.json을 확인하고 Analyze(7)를 completed로 닫음")
     p_close.add_argument("spec_dir", help="spec 디렉터리(workflow-checklist.json이 있는 spec 루트)")

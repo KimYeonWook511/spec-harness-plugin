@@ -14,5 +14,31 @@
     ],
     "execution": "Execution",
     "set_stage": ["Execution", "PR Review", "Root Sync"]
+  },
+  "feature": {
+    "stages": [
+      { "title": "Interview", "group": "명세" },
+      { "title": "Specify", "group": "명세" },
+      { "title": "Clarify", "group": "명세" },
+      { "title": "Scenarios", "group": "명세" },
+      { "title": "Spec Review", "group": "명세" },
+      { "title": "Domain", "group": "계약" },
+      { "title": "Contract", "group": "계약" },
+      { "title": "Contract Review", "group": "계약" },
+      { "title": "Freeze", "group": "동결" }
+    ],
+    "set_stage": [],
+    "reviews": {
+      "Spec Review": {
+        "file": "review-1.json",
+        "docs": ["spec.md", "scenarios.md", "/glossary.md", "/domain/*.md"]
+      },
+      "Contract Review": {
+        "file": "review-2.json",
+        "docs": ["spec.md", "scenarios.md", "contract.md", "/glossary.md", "/domain/*.md", "/api/openapi.yaml"],
+        "unchanged_since": { "Spec Review": ["spec.md", "scenarios.md"] }
+      }
+    },
+    "frozen_docs": ["spec.md", "scenarios.md", "contract.md"]
   }
 }

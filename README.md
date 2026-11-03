@@ -125,6 +125,7 @@ flowchart TD
 | --- | --- |
 | 📖 **skill `guide`** | 안내(`/spec-harness:guide`). 사용자가 겪을 흐름 — 개입 지점, 자동 구간, 막혔을 때 할 일 |
 | 🎬 **skill `run`** | 진입점(`/spec-harness:run`). 10단계를 지휘한다. 상세 동작·데이터 계약의 정본 |
+| 🧱 **skill `feature`** | 기능 spec(`/spec-harness:feature`). 여러 저장소가 한 제품을 만들 때, 공유 docs 저장소에서 기능 spec을 만들고 고치고 버전 태그로 동결한다 |
 | 🔁 **skill `retro`** | 회고(`/spec-harness:retro`). 끝난 spec들의 실행 기록에서 반복되는 실패를 찾아 규칙으로 고친다. 10 Stage 밖이다 |
 | ⚙️ **workflow `execute`** | 실행 오케스트레이터(`/spec-harness:execute`). step마다 구현→검증→검토→커밋→기록 |
 | 🔍 **검사관 6인** | `analyzer-traceability`·`-domain`·`-concurrency`·`-access`·`-rules`·`-clarity` |
@@ -354,6 +355,7 @@ cat ~/.claude/settings.json .claude/settings.json .claude/settings.local.json
 - 진입: `/spec-harness:run`
 - 실행 워크플로: `/spec-harness:execute`
 - 회고: `/spec-harness:retro`
+- 기능 spec (저장소를 나눌 때): `/spec-harness:feature`
 
 ---
 
@@ -420,6 +422,21 @@ docs/specs/**/phases/*/logs/
 `docs/specs`가 아닌 곳을 쓰면 경로를 그 값으로 바꾼다(`spec_root` 설정).
 
 `.spec-harness/config.json`은 **커밋한다** — 그 저장소의 규칙 선언이라 팀이 공유해야 한다. `.spec-harness/` 전체를 무시하면 설정까지 빠져 규칙 주입이 조용히 사라진다.
+
+---
+
+## 🧱 저장소를 나눌 때 — `feature`
+
+서버와 앱처럼 한 제품을 여러 저장소가 만들면, **무엇을 만들고 어떻게 확인할지**(요구·시나리오·계약)를 공유 docs 저장소에서 확정해 버전 태그(`F01-v1`)로 동결하고, 각 구현 저장소가 그 버전을 입력으로 구현한다. 한 저장소가 같은 요구를 따로 정하면 플랫폼 사이가 어긋나기 때문이다.
+
+- docs 저장소에서 `/spec-harness:feature`로 진행한다. 흐름·게이트·버전 규칙·작업 종류별 진입점은 `skills/feature/SKILL.md`가 정본이다.
+- 기능 spec 폴더 위치는 설정 `feature_root`(기본 `features`)로 바꿀 수 있다.
+- docs 저장소의 `.gitignore`:
+
+  ```gitignore
+  /.spec-harness/run/
+  features/*/workflow-checklist.json
+  ```
 
 ---
 
