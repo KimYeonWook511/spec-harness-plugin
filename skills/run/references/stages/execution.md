@@ -4,7 +4,7 @@ Stage 8 Execution(실행)은 **실행 워크플로(`/spec-harness:execute`)를 �
 phase를 끝까지 돌리지 않는다 — 대신 preflight로 실행 워크플로 인자를 만들고, 실행 워크플로가 step 루프를 돈다.
 실행 전 아래 순서를 반드시 거친다. 이 순서는 스크립트가 막지 않으므로 메인 에이전트가 지킨다(`preflight`가 막는 것은 checklist 상태뿐이다).
 
-1. Analyze(7, 문서 검사)까지의 결과(작성한 spec 문서·phase 경로)와 실행 계획을 사용자에게 보고하고, 실행 진행 의사를 가볍게 확인받는다. 별도 Plan Mode·`ExitPlanMode` 절차는 거치지 않는다.
+1. 실행 계획을 보고하고 진행 의사를 가볍게 확인받는다. 계획은 phase별 step 번호·이름·상태를 한 표로 보인다(각 `phases/<phase>/index.json`의 `steps`). 실행 중에는 `/workflows`에 `step 2/5 developer`처럼 위치가 표시된다고 함께 알린다. 별도 Plan Mode·`ExitPlanMode` 절차는 거치지 않는다.
 2. **명세를 먼저 커밋한다** (아래 절).
 3. `AskUserQuestion`으로 agent별 실행 모델을 수집한다. (아래 "실행 옵션 수집" 절 참고)
 4. 수집한 모델을 phase index의 `execution` 필드에 기록한 뒤, preflight → 실행 워크플로 띄우기로 실행한다.

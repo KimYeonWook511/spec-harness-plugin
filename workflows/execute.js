@@ -117,7 +117,7 @@ function finalizerPrompt(a) {
 }
 
 // ── 한 step 처리: 성공이면 {ok}, blocked/error면 {stopped} 반환 ──
-async function runStep(a, step) {
+async function runStep(a, step, pos) {
   const devModel = a.execution && a.execution.developer_model;
   const revModel = a.execution && a.execution.reviewer_model;
   const comModel = a.execution && a.execution.committer_model;
@@ -125,12 +125,13 @@ async function runStep(a, step) {
   // 회고 재료. reviewer는 파일을 쓰지 않으므로 판정은 여기서만 남는다.
   const history = [];
 
+  log(`step ${pos} 시작: ${step.name}`);
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    const tag = `step${step.step}`;
+    const tag = attempt > 1 ? `step ${pos} (시도 ${attempt})` : `step ${pos}`;
 
     // 1) developer
     const dev = parseAgentJson(await callAgent(
-      'spec-harness:developer', devModel, developerPrompt(a, step, attempt, prevError), `${tag}:developer`, 'Implement'));
+      'spec-harness:developer', devModel, developerPrompt(a, step, attempt, prevError), `${tag} developer`, 'Implement'));
     if (!dev || !dev.status) {
       prevError = 'developer 반환 JSON 파싱 실패 — 약속된 JSON 한 개만 출력해야 한다.';
       history.push(historyEntry(attempt, 'developer_format', prevError, null));
@@ -152,7 +153,7 @@ async function runStep(a, step) {
 
     // 2) reviewer
     const rev = parseAgentJson(await callAgent(
-      'spec-harness:reviewer', revModel, reviewerPrompt(a, step, attempt, dev), `${tag}:reviewer`, 'Implement'));
+      'spec-harness:reviewer', revModel, reviewerPrompt(a, step, attempt, dev), `${tag} reviewer`, 'Implement'));
     if (!rev || !rev.decision) {
       prevError = 'reviewer 반환 JSON 파싱 실패.';
       history.push(historyEntry(attempt, 'reviewer_format', prevError, dev.struggles));
@@ -177,11 +178,11 @@ async function runStep(a, step) {
 
     // 3) committer (결과 신뢰, 엄격 검증 없음)
     const com = parseAgentJson(await callAgent(
-      'spec-harness:committer', comModel, committerPrompt(a, step, attempt, dev), `${tag}:committer`, 'Implement')) || { committed: false, commits: [] };
+      'spec-harness:committer', comModel, committerPrompt(a, step, attempt, dev), `${tag} committer`, 'Implement')) || { committed: false, commits: [] };
 
     // 4) recorder — 정본 index에 completed 기록
     const rec = parseAgentJson(await callAgent('spec-harness:recorder', null,
-      recorderPrompt(a, step, 'completed', dev.summary, null, history), `${tag}:recorder`, 'Implement'));
+      recorderPrompt(a, step, 'completed', dev.summary, null, history), `${tag} recorder`, 'Implement'));
     if (!rec || rec.ok !== true) {
       // 기록이 안 되면 재실행 시 이미 구현된 step을 다시 돈다. 커밋은 이미 남았으므로 사람이 확인해야 한다.
       return {
@@ -192,6 +193,7 @@ async function runStep(a, step) {
       };
     }
 
+    log(`step ${pos} 끝: ${step.name}`);
     return { ok: true, step: step.step, summary: dev.summary, commits: com.commits || [] };
   }
 
@@ -215,6 +217,10 @@ if (!a || !Array.isArray(a.steps)) {
 }
 
 const results = [];
+const total = a.steps.length;
+const done = a.steps.filter(s => s.status === 'completed').length;
+log(`phase ${a.phase}: step ${total}개, 이번에 ${total - done}개 실행`);
+log(a.steps.map(s => `${s.step}. ${s.name}${s.status === 'completed' ? ' (완료)' : ''}`).join(' · '));
 
 phase('Implement');
 let stopped = null;
@@ -236,13 +242,13 @@ for (const step of a.steps) {
     };
     break;
   }
-  const r = await runStep(a, step);
+  const r = await runStep(a, step, `${step.step}/${total}`);
   results.push(r);
   if (r.stopped) {
     // 이번 실행에서 blocked/error 발생 → 그 상태를 정본에 기록하고 중단
     await callAgent('spec-harness:recorder', null,
       recorderPrompt(a, { step: r.step }, r.stopped, r.summary || '', r.reason, r.history),
-      `step${r.step}:recorder`, 'Implement');
+      `step ${r.step}/${total} recorder`, 'Implement');
     stopped = r;
     break;
   }
