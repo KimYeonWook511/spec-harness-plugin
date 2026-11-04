@@ -1206,9 +1206,9 @@ def upstream_freshness(spec_dir: Path, root: Path) -> tuple[dict | None, list[st
         return None, []
     latest = newer[-1]
     if _parse_version(latest)[1] > major:
-        return {"ok": False, "error": f"docs 저장소에 비호환 새 버전 {latest}가 있다(가져온 것은 {version}). "
+        return {"ok": False, "error": f"docs 저장소에 major 새 버전 {latest}가 있다(가져온 것은 {version}). 구현을 다시 확인해야 한다. "
                 "CHANGELOG에서 바뀐 것을 확인하고 import-feature로 다시 가져온 뒤 Scope부터 다시 본다."}, []
-    note = f"docs 저장소에 호환 새 버전 {latest}가 있다(가져온 것은 {version})."
+    note = f"docs 저장소에 minor 새 버전 {latest}가 있다(가져온 것은 {version})."
     if up.get("on_newer_compatible") == "block":
         return {"ok": False, "error": note + " 설정이 block이라 막는다. 다시 가져온 뒤 실행한다."}, []
     return None, [note]

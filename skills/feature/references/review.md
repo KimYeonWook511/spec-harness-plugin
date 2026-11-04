@@ -1,8 +1,8 @@
 # 검사 (Spec Review · Contract Review)
 
-검사를 두 번 하는 이유: 계약은 spec 위에 짓는다. spec의 결함을 계약까지 끌고 가면 고칠 곳이 두 배가 된다. Spec Review는 spec 자체의 품질을, Contract Review는 계약과 주변 문서의 일치를 본다.
+검사를 두 번 하는 이유: 계약은 spec 위에 짓는다. spec의 결함을 계약까지 끌고 가면 고칠 곳이 두 배가 된다. Spec Review(spec 검사)는 spec 자체의 품질을, Contract Review(계약 검사)는 계약과 주변 문서의 일치를 본다.
 
-호출·결과 모으기·항목별 처리는 `<RUN_DIR>/references/stages/analyze.md`의 "호출", "모으기", "triage"를 따른다. 다른 점은 아래뿐이다.
+호출·결과 모으기·항목별 처리는 `<RUN_DIR>/references/stages/analyze.md`의 해당 절을 따른다. 다른 점은 아래뿐이다.
 
 | | Spec Review | Contract Review |
 | --- | --- | --- |
@@ -10,11 +10,11 @@
 | 결과 파일 | `<F>/review-1.json` | `<F>/review-2.json` |
 | 닫기 | `python3 "<EXEC>" close-review <F> --stage "Spec Review"` | `python3 "<EXEC>" close-review <F> --stage "Contract Review"` |
 
-결과 파일 형식은 `analysis.json`과 같다(`<RUN_DIR>/references/phase-files.md`). 재검사면 이전 결과 파일 경로를 함께 넘긴다.
+결과 파일 형식은 `analysis.json`과 같다(`<RUN_DIR>/references/phase-files.md`). 다시 검사하면 이전 결과 파일 경로를 함께 넘긴다.
 
 ## 검사관에게 넘기는 검사 범위
 
-각 검사관 프롬프트에 공통 계약 경로와 함께 아래 블록을 넣는다. 검사관은 이 블록이 정한 문서와 질문만 본다.
+각 검사관 프롬프트에 검사관 공통 규칙(`<RUN_DIR>/references/analysis-contract.md`) 경로와 함께 아래 블록을 넣는다. 검사관은 이 블록이 정한 문서와 질문만 본다.
 
 두 블록 모두 이 규칙을 함께 넣는다: **한 플랫폼이 다른 플랫폼과 합의하지 않고 정해도 되는 것은 이 검사의 발견이 아니다.** 그런 것은 `not_applicable`에 "구현 저장소 몫"으로 적는다.
 
@@ -62,8 +62,8 @@
 
 ## 닫은 뒤
 
-검사가 끝난 뒤 판정 대상 문서를 고쳤으면 닫히지 않는다. 다시 검사하는 것이 원칙이고, 문구 수준이라 다시 검사할 필요가 없다면 바뀐 파일과 이유를 사용자에게 알리고 확인받은 뒤 `--edited "<이유>"`로 닫는다. 그 이유와 파일은 결과 파일의 `edited_after_review`에 남는다.
+검사가 끝난 뒤 검사 대상 문서를 고쳤으면 닫히지 않는다. 다시 검사하는 것이 원칙이고, 문구 수준이라 다시 검사할 필요가 없다면 바뀐 파일과 이유를 사용자에게 알리고 확인받은 뒤 `--edited "<이유>"`로 닫는다. 그 이유와 파일은 결과 파일의 `edited_after_review`에 남는다.
 
-`close-review`가 판정 대상 문서의 지문을 결과 파일에 남기고 그 단계를 `completed`로 둔다. Contract Review는 Spec Review 이후 `spec.md`·`scenarios.md`가 바뀌었으면 닫히지 않는다 — 계약을 만들다 요구를 고쳤다면 Spec Review부터 다시 돌린다. domain·glossary는 그 사이 Domain 단계가 확정하므로 바뀌어도 된다.
+`close-review`가 검사 대상 문서의 문서 해시를 결과 파일에 남기고 그 단계를 `completed`로 둔다. Contract Review는 Spec Review 이후 `spec.md`·`scenarios.md`가 바뀌었으면 닫히지 않는다 — 계약을 만들다 요구를 고쳤다면 Spec Review부터 다시 돌린다. domain·glossary는 그 사이 Domain(도메인 확정) 단계가 확정하므로 바뀌어도 된다.
 
-닫은 결과(처리한 항목, 반려 근거)를 사용자에게 보고하고 다음 단계로 간다.
+닫은 결과(고친 항목, 근거를 남기고 넘긴 항목과 그 근거)를 사용자에게 보고하고 다음 단계로 간다.

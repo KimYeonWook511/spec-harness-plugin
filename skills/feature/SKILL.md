@@ -7,7 +7,7 @@ description: 여러 저장소(서버·앱 등)가 한 제품을 만들 때, 공�
 
 여러 저장소가 한 제품을 만들면 **무엇을 만들고 어떻게 확인할지**를 공유 docs 저장소에서 확정·동결하고, **어떻게 만들지**는 각 구현 저장소가 정한다. 이 skill은 docs 저장소에서 기능 spec을 만들고, 고치고, 버전을 붙인다.
 
-규칙(위험영역은 가정하지 않는다, 게이트마다 누가 막는지 정한다, 불변 시나리오는 계약이다)은 `run`과 같다. 같은 절차는 `run`의 단계 파일을 그대로 쓰고, 이 문서에는 다른 점만 적는다.
+규칙과 같은 절차는 `run`의 것을 그대로 쓰고, 이 문서에는 다른 점만 적는다.
 
 ## 언제 어느 진입점을 쓰나
 
@@ -17,7 +17,7 @@ description: 여러 저장소(서버·앱 등)가 한 제품을 만들 때, 공�
 | 기존 기능의 동작 변경 | docs 저장소에서 `feature`(기능 변경) → 버전 올림 → 각 구현 저장소에서 `implement` |
 | 사용자에게 보이는 동작·계약이 바뀌지 않는 일 (리팩터, 성능, 로깅, 의존성 업그레이드) | 해당 구현 저장소의 `run` |
 
-구현 저장소의 `implement`는 동결된 기능 spec 버전을 가져와 읽기 전용으로 두고 구현한다.
+구현 저장소의 `implement`는 동결된 기능 spec 버전을 가져와 읽기만 하며 구현한다.
 
 **버그는 "기능 spec이 이 경우를 뭐라고 하나"로 가른다.**
 
@@ -72,36 +72,36 @@ ID는 `F01-FR-001`, `F01-SC-001`, `F01-SCN-001`처럼 기능 번호를 붙인다
 
 | 단계 | 게이트 | 누가 막나 |
 | --- | --- | --- |
-| Clarify | 위험영역 마커 0 | 메인 에이전트 |
-| Scenarios | 모든 요구·완료 기준에 관찰 가능한 시나리오 | 메인 에이전트 |
-| Spec Review | CRITICAL은 근거를 적은 반려만 | `close-review` |
-| Contract Review | CRITICAL은 근거를 적은 반려만 + Spec Review 이후 spec·시나리오 불변 | `close-review` |
-| 두 검사 | `start-review`로 고정한 문서가 닫을 때까지 그대로다(바뀌면 재검사, 또는 사용자 확인 뒤 `--edited`로 사유 기록) | `close-review` |
-| Freeze | 두 검사가 닫혔고 그 뒤 문서가 바뀌지 않았다, CHANGELOG·기능 목록에 항목이 있다, 버전 규칙을 지켰다 | `freeze` |
+| Clarify(모호함 해소) | 위험영역 마커 0 | 메인 에이전트 |
+| Scenarios(시나리오 확정) | 모든 요구·완료 기준에 관찰 가능한 시나리오 | 메인 에이전트 |
+| Spec Review(spec 검사) | CRITICAL은 고치거나 근거를 남기고 넘긴다 | `close-review` |
+| Contract Review(계약 검사) | CRITICAL은 고치거나 근거를 남기고 넘긴다 + Spec Review 이후 spec·시나리오 불변 | `close-review` |
+| 두 검사 | `start-review`로 고정한 문서가 닫을 때까지 그대로다(바뀌면 다시 검사, 또는 사용자 확인 뒤 `--edited`로 사유 기록) | `close-review` |
+| Freeze(동결) | 두 검사가 닫혔고 그 뒤 문서가 바뀌지 않았다, CHANGELOG·기능 목록에 항목이 있다, 버전 규칙을 지켰다 | `freeze` |
 | Freeze | 동결된다는 사실을 알리고 사용자가 진행을 밝혔다 | 사용자가 답해야 넘어간다 |
 | Freeze | 태그는 머지된 깨끗한 체크아웃에서만 | `freeze --tag` |
 
-**버전 규칙**: 첫 동결은 `v1`. `spec.md`·`contract.md`와 `scenarios.md`의 **`불변` 시나리오**가 그대로면 minor(`v1.1`), 하나라도 바뀌면 major(`v2`). `유동` 시나리오만 바뀐 것은 minor다. 불변을 유동으로 내리는 것도 major다. `freeze`가 직전 태그와 비교해 막는다.
+**버전 규칙**: 첫 동결은 `v1`. `spec.md`·`contract.md`와 `scenarios.md`의 **`불변` 시나리오**가 그대로면 minor(`v1.1`), 하나라도 바뀌면 major(`v2`). `유동` 시나리오만 바뀐 것은 minor다. 불변을 유동으로 내리는 것도 major다. `freeze`가 직전 태그와 비교해 막는다. major는 구현 저장소가 다시 확인해야 하는 변경이고, 확인 결과 기존 구현에서 고칠 것이 없을 수도 있다.
 
-단계 정의와 검사별 판정 대상 문서는 `<RUN_DIR>/stages.json`의 `feature`에 있다.
+단계 정의와 검사별로 보는 문서는 `<RUN_DIR>/stages.json`의 `feature`에 있다.
 
 ## 진행 상태 표
 
 | 묶음 | 단계 | 상태 |
 | --- | --- | --- |
-| 명세 | Interview |  |
-| 명세 | Specify |  |
+| 명세 | Interview(인터뷰) |  |
+| 명세 | Specify(명세 작성) |  |
 | 명세 | Clarify |  |
 | 명세 | Scenarios |  |
 | 명세 | Spec Review |  |
-| 계약 | Domain |  |
-| 계약 | Contract |  |
+| 계약 | Domain(도메인 확정) |  |
+| 계약 | Contract(계약 작성) |  |
 | 계약 | Contract Review |  |
 | 동결 | Freeze |  |
 
 ## 흐름 — 새 기능
 
-`run`의 단계 파일을 쓸 때 단계 번호와 이름은 이렇게 바꿔 읽는다: Design·Analyze가 맡던 계약 확정은 Contract로, 검사는 Spec Review·Contract Review로, 동결은 Freeze로. 구현 설계(DTO·테이블·화면)는 이 skill에서 다루지 않는다.
+`run`의 단계 파일을 쓸 때 단계 번호와 이름은 이렇게 바꿔 읽는다: Design(설계)·Analyze(문서 검사)가 맡던 계약 확정은 Contract로, 검사는 Spec Review·Contract Review로, 동결은 Freeze로. 구현 설계(DTO·테이블·화면)는 이 skill에서 다루지 않는다.
 
 방법론은 `<RUN_DIR>/SKILL.md`의 "방법론 (opt-in)" 절차를 그대로 따른다(설정의 `methodologies`).
 
@@ -132,10 +132,10 @@ ID는 `F01-FR-001`, `F01-SC-001`, `F01-SCN-001`처럼 기능 번호를 붙인다
 
 `<RUN_DIR>/references/stages/specify.md`를 따른다. 다른 점:
 
-- 작업 공간 slug는 `F<번호>-<slug>`, spec 폴더는 `<F>`다. checklist는 `python3 "<EXEC>" init-checklist <F> --workflow feature`로 만든다.
+- 작업 공간(worktree) slug는 `F<번호>-<slug>`, spec 폴더는 `<F>`다. checklist는 `python3 "<EXEC>" init-checklist <F> --workflow feature`로 만든다.
 - `spec.md`는 `<SKILL_DIR>/templates/spec.md`로 쓴다.
 - 엔티티 상태가 걸리면 `domain/<entity>.md` **초안**도 이 단계에서 쓴다(템플릿 `entity.md`). 위험영역이라 Spec Review가 봐야 한다.
-- 루트 문서 정합성 확인의 대상은 `adr/`, `domain/`, `glossary.md`, 의존 기능의 동결본이다.
+- 작성 전에 기존 결정과 부딪히는지 확인할 루트 문서는 `adr/`, `domain/`, `glossary.md`, 의존 기능의 동결본이다.
 
 ### 3. Clarify
 

@@ -6,17 +6,13 @@
 
 ## 🎯 무엇을 하나
 
-바로 코드를 짜지 않는다. 먼저 명세를 세우고, 모호한 곳은 추측으로 메우지 않고 사용자와 확정한 뒤, **확정된 명세만** 자동 실행으로 넘긴다. 명세가 상류, 코드가 하류다.
+바로 코드를 짜지 않는다. 먼저 명세를 세우고, 모호한 곳은 추측으로 메우지 않고 사용자와 확정한 뒤, **확정된 명세만** 자동 실행으로 넘긴다. 코드는 확정된 명세를 따른다.
 
 세 가지가 이 하네스의 성격을 정한다.
 
-- **위험영역은 가정하지 않는다.** 틀리면 데이터·돈·접근권한·외부 계약이 깨지는 곳(결제·인증·데이터 모델·상태 전이)은 기본값으로 메우지 않고 사용자와 확정한 뒤에만 넘어간다.
-- **통과 기준이 말이 아니라 실행 명령이다.** 각 step의 Acceptance Criteria는 실제로 돌려 exit code로 판정한다.
+- **위험영역은 가정하지 않는다.** 틀리면 데이터·돈·접근권한·외부 연동이 깨지는 곳(결제·인증·데이터 모델·상태 전이)은 기본값으로 메우지 않고 사용자와 확정한 뒤에만 넘어간다.
+- **통과 기준이 말이 아니라 실행 명령이다.** 각 step의 Acceptance Criteria는 실제로 돌려 exit code로 통과 여부를 정한다.
 - **구현자와 검증자가 분리돼 있다.** 구현한 에이전트의 자기보고를 다른 에이전트가 파일과 대조한다.
-
-### 💡 구조를 여는 열쇠 하나
-
-실행 단계의 오케스트레이터는 **dynamic workflow(JavaScript)**다. 이 JS는 shell·git·파일시스템을 직접 다루지 못하고, `agent()`로 서브에이전트를 띄워 그 반환값으로 분기할 뿐이다. 그래서 AC 실행·git 커밋·상태 기록·마무리는 전부 **에이전트가 `execute.py` 서브커맨드를 통해** 대신 수행한다. 이 한 줄이 아래 구조 대부분을 설명한다.
 
 ---
 
@@ -32,8 +28,8 @@ flowchart TD
     S5 --> FZ{{"🧊 동결<br>요구 · 불변 시나리오"}}
     FZ --> S6["6️⃣ Steps<br>step 분해 + 검증 대상 + AC"]
     S6 --> S7["7️⃣ Analyze<br>검사관 6인 + 항목별 처리"]
-    S7 --> CA{{"🚦 close-analyze<br>CRITICAL 해소 · step 형식"}}
-    CA --> S8["8️⃣ Execution<br>명세 커밋 → workflow 완주 → PR"]
+    S7 --> CA{{"🚦 close-analyze<br>CRITICAL 처리 · step 형식"}}
+    CA --> S8["8️⃣ Execution<br>명세 커밋 → 실행 워크플로 → PR"]
     S8 --> S9["9️⃣ PR Review<br>사람이 검토"]
     S9 --> S10["🔟 Root Sync<br>루트 문서 갱신 + _archive 이동"]
     S10 --> M["사람이 머지"]
@@ -65,20 +61,20 @@ flowchart TD
 | Clarify(3) | 위험영역 마커가 하나도 안 남았다 | 메인 에이전트 |
 | Scenarios(4) | 확인 방법 없는 요구·완료 기준이 없다 | 메인 에이전트 |
 | Design(5) | 원칙 점검 · 동결 고지 | 메인 · 사용자 |
-| **Analyze(7)** | **CRITICAL 중 근거 있는 반려가 아닌 것이 없다** | 🔒 `close-analyze` |
+| **Analyze(7)** | **모든 CRITICAL을 고쳤거나 근거를 남기고 넘겼다** | 🔒 `close-analyze` |
 | **Analyze(7)** | **모든 step에서 AC와 검증 대상이 파싱된다** | 🔒 `close-analyze` |
-| Analyze(7) | 검사한 뒤 문서가 바뀌지 않았다 (바뀌었으면 재검사, 또는 사용자 확인 뒤 사유 기록) | `close-analyze` |
+| Analyze(7) | 검사한 뒤 문서가 바뀌지 않았다 (바뀌었으면 다시 검사, 또는 사용자 확인 뒤 사유 기록) | `close-analyze` |
 | **Execution(8)** | **Analyze를 닫은 뒤 문서가 안 바뀌었다** | 🔒 `preflight` |
 | Execution(8) | 1~7이 모두 `completed`다 | 🔒 `preflight` |
 | Execution(8) | AC 각 명령의 exit code가 기대값과 같다 | `verify-ac` 실행 → `reviewer` 대조 |
-| Execution(8) | reviewer 판정이 `approved`다 | `execute.js` |
-| Execution(8) | 한 step의 시도가 3회를 넘지 않는다 | 🔒 `execute.js` |
-| Execution(8) | 중단된 step은 `pending`으로 되돌려야 재개된다 | 🔒 `execute.js` |
-| **Root Sync(10)** | **Root Sync가 끝났고 `_archive` 승격본이 커밋됐다** | 🔒 PreToolUse hook (agent의 Bash 머지 한정) |
+| Execution(8) | reviewer 판정이 `approved`다 | 실행 워크플로 |
+| Execution(8) | 한 step의 시도가 3회를 넘지 않는다 | 🔒 실행 워크플로 |
+| Execution(8) | 중단된 step은 `pending`으로 되돌려야 재개된다 | 🔒 실행 워크플로 |
+| **Root Sync(10)** | **Root Sync가 끝났고 `_archive`로 옮긴 spec이 커밋됐다** | 🔒 PreToolUse hook (agent의 Bash 머지 한정) |
 
-🔒 표시는 **모델 판단이 끼지 않는** 게이트다. 스크립트가 파일·문서 해시·파서 결과·git 상태를 직접 보고 판정한다.
+🔒 표시는 **모델 판단이 끼지 않는** 게이트다. 스크립트가 파일·문서 해시·파서 결과·git 상태를 직접 보고 정한다.
 
-> ⚠️ **AC 통과 게이트만은 다르게 읽어야 한다.** `verify-ac`가 명령을 실제로 돌려 결과를 파일에 남기는 것은 맞지만, `execute.js`는 파일을 읽을 수단이 없어 developer가 반환한 값을 본다. 그것을 파일과 대조하는 것이 바로 아래 reviewer의 역할이다 — **두 게이트는 짝이며, 대조를 빠뜨리면 AC를 통과하지 않은 코드가 커밋까지 간다.**
+> ⚠️ **AC 통과 게이트만은 다르게 읽어야 한다.** `verify-ac`가 명령을 실제로 돌려 결과를 파일에 남기는 것은 맞지만, 실행 워크플로는 파일을 읽을 수단이 없어 developer가 반환한 값을 본다. 그것을 파일과 대조하는 것이 바로 아래 reviewer의 역할이다 — **두 게이트는 짝이며, 대조를 빠뜨리면 AC를 통과하지 않은 코드가 커밋까지 간다.**
 
 ---
 
@@ -92,7 +88,7 @@ flowchart TD
 | `불변` 시나리오 | ✅ | **계약이다.** 구현이 어렵다는 이유로 고치지 않는다 |
 | `유동` 시나리오 | ❌ | 구현 방식이 바뀌면 함께 바뀔 수 있다 |
 | 설계 문서 | ❌ | 코드가 달라지면 실제 구현된 대로 갱신한다 |
-| phase·step·AC | ❌ | 실행이 막히면 재분해할 수 있다 |
+| phase·step·AC | ❌ | 실행이 막히면 다시 나눌 수 있다 |
 
 가르는 기준은 **틀렸을 때 무엇이 깨지는가**다. 요구·불변 시나리오가 흔들리면 만들던 것이 달라지고, 분해가 틀린 것은 다시 나누면 된다.
 
@@ -106,7 +102,7 @@ flowchart TD
 | **phase** | spec 안에서 한 번 통합·검증할 덩어리. 기본 1개(`1-main`) |
 | **step** | phase 안의 구현 단위. **커밋 1개**에 대응하고 자기완결적 AC를 가진다 |
 
-**Stage**(전체 진행 1~10)와 위 단위는 다른 축이다. Stage 8 "안에서" workflow가 한 spec의 phase·step들을 순차 실행하는 포함 관계다.
+**Stage**(전체 진행 1~10)와 위 단위는 다른 축이다. Stage 8 "안에서" 실행 워크플로가 한 spec의 phase·step들을 순차 실행하는 포함 관계다.
 
 이름은 spec-kit 계보에서 왔다. spec-kit의 feature가 이 하네스의 **spec**, `tasks.md`의 한 task가 **step**이다. spec-kit의 "task"는 최하위 실행을 뜻해 이 하네스의 최상위 단위와 충돌하므로 최상위를 spec으로 부른다. **phase**는 spec-kit에 대응이 없는 이 하네스 고유의 중간 통합 묶음이다.
 
@@ -116,7 +112,7 @@ flowchart TD
 
 ### 3층
 
-- **엔진** — 방법론 무관 프로세스. `skills/`(진입) + `agents/`(역할) + `workflows/`(실행 오케스트레이션)
+- **기본 흐름** — 방법론과 무관한 프로세스. `skills/`(진입) + `agents/`(역할) + `workflows/`(실행 워크플로)
 - **방법론(opt-in)** — `methodologies/<name>/`. 켜면 그 방법론의 검사·에이전트·템플릿이 얹힌다
 - **인스턴스** — 각 저장소가 제공한다. 규칙 문서, 활성 방법론, 브랜치 모델. 플러그인에는 담지 않는다
 
@@ -125,15 +121,17 @@ flowchart TD
 | | 무엇 |
 | --- | --- |
 | 📖 **skill `guide`** | 안내(`/spec-harness:guide`). 사용자가 겪을 흐름 — 개입 지점, 자동 구간, 막혔을 때 할 일 |
-| 🎬 **skill `run`** | 진입점(`/spec-harness:run`). 10단계를 지휘한다. 상세 동작·데이터 계약의 정본 |
+| 🎬 **skill `run`** | 진입점(`/spec-harness:run`). 10단계를 지휘한다. 상세 동작·데이터 형식의 기준 |
 | 🔨 **skill `implement`** | 기능 구현(`/spec-harness:implement`). 구현 저장소에서 동결된 기능 spec 버전을 가져와 읽기 전용으로 두고 설계·구현한다 |
 | 🧱 **skill `feature`** | 기능 spec(`/spec-harness:feature`). 여러 저장소가 한 제품을 만들 때, 공유 docs 저장소에서 기능 spec을 만들고 고치고 버전 태그로 동결한다 |
 | 🔁 **skill `retro`** | 회고(`/spec-harness:retro`). 끝난 spec들의 실행 기록에서 반복되는 실패를 찾아 규칙으로 고친다. 10 Stage 밖이다 |
-| ⚙️ **workflow `execute`** | 실행 오케스트레이터(`/spec-harness:execute`). step마다 구현→검증→검토→커밋→기록 |
+| ⚙️ **workflow `execute`** | 실행 워크플로(`/spec-harness:execute`). step마다 구현→검증→검토→커밋→기록 |
 | 🔍 **검사관 6인** | `analyzer-traceability`·`-domain`·`-concurrency`·`-access`·`-rules`·`-clarity` |
 | 🤖 **실행 에이전트** | `developer`·`reviewer`·`committer`·`recorder`·`finalizer` |
-| 🧪 **`methodologies/`** | opt-in 방법론(`ddd`·`bdd`). manifest 하나로 자기 기여물을 밝힌다 |
+| 🧪 **`methodologies/`** | opt-in 방법론(`ddd`·`bdd`). manifest 하나로 방법론이 더하는 것을 밝힌다 |
 | 🪝 **hooks** | 진행 로그 기록 + 루트 동기화 전 머지 검사. 진행 중인 spec이 없으면 아무것도 하지 않는다 |
+
+실행 워크플로는 shell·git·파일을 직접 다루지 못하고, 서브에이전트를 띄워 그 반환값으로 분기만 한다. 그래서 AC 실행·git 커밋·상태 기록·마무리는 에이전트가 `execute.py` 서브커맨드로 대신 한다.
 
 ---
 
@@ -145,7 +143,7 @@ flowchart TD
 flowchart TD
     M["메인 에이전트"] --> T["🔗 traceability<br>요구→시나리오→검증대상→AC<br>사슬이 끊긴 곳"]
     M --> D["🧬 domain<br>엔티티 식별 · 상태 전이<br>위험영역 판별과 안정성"]
-    M --> C["⚡ concurrency<br>경합 수렴 · 멱등성<br>트랜잭션 경계 · 보상"]
+    M --> C["⚡ concurrency<br>경합 결과 · 멱등성<br>트랜잭션 경계 · 실패 시 되돌리는 처리"]
     M --> AC["🔐 access<br>누가 부를 수 있나<br>남의 데이터가 보이나"]
     M --> R["📏 rules<br>저장소 규칙 위반<br>핵심 산출물 누락"]
     M --> CL["📝 clarity<br>측정 기준 없는 요구<br>용어 불일치 · 중복"]
@@ -161,7 +159,7 @@ flowchart TD
     TR --> CLS["close-analyze"]
 ```
 
-공통 규칙(read-only·입력·심각도·반환 형식)은 `references/analysis-contract.md` **한 곳**에 두고 여섯이 그것을 읽는다.
+검사관 공통 규칙(읽기만 한다·입력·심각도·응답 형식)은 `skills/run/references/analysis-contract.md` **한 곳**에 두고 여섯이 그것을 읽는다.
 
 ### 🤝 이견을 지우지 않는다
 
@@ -174,12 +172,12 @@ CRITICAL·HIGH를 하나씩 처리하고 결과를 `analysis.json`에 남긴다.
 | 선택 | 기록 | 뜻 |
 | --- | --- | --- |
 | 고친다 | `{"kind": "fixed"}` | 문서를 고치고 Analyze를 다시 돈다 |
-| 반려한다 | `{"kind": "rejected", "reason": "..."}` | **근거 없이는 기록하지 않는다** |
+| 반려한다(근거를 남기고 넘김) | `{"kind": "rejected", "reason": "..."}` | **근거 없이는 기록하지 않는다** |
 | 자세히 본다 | 없음 | 무엇이 어떻게 깨지는지 설명하고 다시 묻는다 |
 
 검사관을 띄우기 직전에 `start-review`가 검사 대상 문서를 고정한다. 검사 뒤 문서를 고치고 그대로 닫는 길을 막기 위해서다.
 
-`close-analyze`는 **`fixed`도 막는다.** "고치기로 했다"는 의사일 뿐이고, 해소는 **다시 분석해 그 발견이 사라지는 것**으로만 확인된다. 닫으면서 그 시점 문서의 해시를 남겨, 이후 문서가 바뀌면 preflight가 낡은 분석을 잡는다.
+`close-analyze`는 **`fixed`도 막는다.** "고치기로 했다"는 의사일 뿐이고, 고쳤는지는 **다시 검사해 그 발견이 사라지는 것**으로만 확인된다. 닫으면서 그 시점 문서의 해시를 남겨, 이후 문서가 바뀌면 preflight가 낡은 검사 결과를 잡는다.
 
 ---
 
@@ -187,15 +185,15 @@ CRITICAL·HIGH를 하나씩 처리하고 결과를 `analysis.json`에 남긴다.
 
 ```mermaid
 flowchart TD
-    PF["execute.py preflight<br>게이트 검사 + workflow 인자 생성"] --> WF["/spec-harness:execute<br>pending step부터 순차"]
+    PF["execute.py preflight<br>게이트 검사 + 실행 워크플로 인자 생성"] --> WF["/spec-harness:execute<br>pending step부터 순차"]
     WF --> G["👷 Developer<br>build-context → 구현 → verify-ac"]
     G -->|blocked / error| L["🛑 즉시 중단 → 사람에게 보고"]
     G -->|completed| H{"AC 통과?"}
     H -->|아니오| J["🔁 재시도 (developer부터, 최대 3회)"]
-    H -->|예| I["🔎 Reviewer<br>read-only 검토 + AC 결과 파일 대조"]
+    H -->|예| I["🔎 Reviewer<br>읽기만 하는 검토 + AC 결과 파일 대조"]
     I -->|retryable| J
     I -->|blocked| L
-    I -->|approved| K["💾 Committer<br>코드 + as-built 문서 커밋"]
+    I -->|approved| K["💾 Committer<br>코드 + 실제 구현된 대로 고친 문서 커밋"]
     J --> G
     K --> R["🗒️ Recorder<br>step status를 phase index에 기록"]
     R --> N{"다음 pending step?"}
@@ -228,14 +226,14 @@ flowchart LR
 
 ## 🔒 Root Sync 전 머지 검사
 
-작업 폴더는 Root Sync에서 `_archive/`로 옮겨진다. **루트 문서 갱신과 그 옮김이 끝나기 전에 머지되면 명세 기록이 작업 폴더째로 남아 정리되지 않는다.** PreToolUse hook이 agent의 `gh pr merge`를 가로채 두 가지를 함께 본다.
+spec 폴더는 Root Sync에서 `_archive/`로 옮겨진다. **루트 문서 갱신과 그 옮김이 끝나기 전에 머지되면 명세 기록이 spec 폴더째로 남아 정리되지 않는다.** PreToolUse hook이 agent의 `gh pr merge`를 가로채 두 가지를 함께 본다.
 
 | 무엇을 보나 | 왜 |
 | --- | --- |
 | checklist의 Root Sync가 `completed`인가 | 단계가 끝났는지 |
-| `_archive/pr-N-<spec>/spec.md`가 **HEAD에 커밋됐는가** | 상태는 메인 에이전트가 찍는 값이라, 승격을 건너뛴 채 `completed`로 찍힐 수 있다 |
+| `_archive/pr-N-<spec>/spec.md`가 **HEAD에 커밋됐는가** | 상태는 메인 에이전트가 찍는 값이라, `_archive`로 옮기기를 건너뛴 채 `completed`로 찍힐 수 있다 |
 
-staging만 한 사본은 통과하지 못한다 — 커밋되지 않은 파일은 PR에 올라가지 않기 때문이다.
+`git add`만 한 파일은 통과하지 못한다 — 커밋되지 않은 파일은 PR에 올라가지 않기 때문이다.
 
 **무엇을 할지는 저장소가 정한다** — `.spec-harness/config.json`의 `merge.agent`.
 
@@ -247,7 +245,7 @@ staging만 한 사본은 통과하지 못한다 — 커밋되지 않은 파일�
 
 기본값이 막지 않고 묻기만 하는 이유는, 이 hook이 플러그인을 켠 모든 세션에 걸리기 때문이다. 하네스를 쓰지 않는 저장소에는 읽을 checklist가 없어 아무 일도 일어나지 않는다.
 
-> ⚠️ **어느 값이든 이 판정은 agent에게만 걸린다.** hook은 agent의 Bash 도구 호출만 보므로, **사람이 GitHub 웹에서 머지 버튼을 누르면 아무것도 막지 못한다.** 하네스가 강제할 수 있는 범위가 여기까지다.
+> ⚠️ **어느 값이든 이 검사는 agent에게만 걸린다.** hook은 agent의 Bash 도구 호출만 보므로, **사람이 GitHub 웹에서 머지 버튼을 누르면 아무것도 막지 못한다.** 하네스가 강제할 수 있는 범위가 여기까지다.
 >
 > 사람의 머지까지 막으려면 **저장소 쪽에 규칙을 세워야 한다** — PR diff에 `_archive/pr-<번호>-<spec명>/spec.md`가 있는지 검사하는 CI job을 만들고, branch protection에서 그것을 필수 상태 검사(required status check)로 지정하는 방식이다.
 
@@ -366,7 +364,7 @@ cat ~/.claude/settings.json .claude/settings.json .claude/settings.local.json
 
 ## 🛠️ 저장소 설정 (선택)
 
-`CLAUDE.md`는 항상 규칙으로 읽는다. 그 밖에 규칙으로 읽을 문서는 저장소가 직접 나열한다. 설정이 없으면 `CLAUDE.md`만으로 코어 흐름이 돈다(오류가 아니다).
+`CLAUDE.md`는 항상 규칙으로 읽는다. 그 밖에 규칙으로 읽을 문서는 저장소가 직접 나열한다. 설정이 없으면 `CLAUDE.md`만으로 기본 흐름이 돈다(오류가 아니다).
 
 `.spec-harness/config.json` — 아래 문서 이름·경로는 모두 **예시**다. 하네스는 특정 파일 이름을 요구하지 않는다.
 
@@ -392,12 +390,12 @@ cat ~/.claude/settings.json .claude/settings.json .claude/settings.local.json
 }
 ```
 
-- **`rule_docs`** — 구현 단계에서 **항상 주입**하는 규칙 문서. 문자열이면 문서 전문, 객체면 지정한 섹션만 넣는다. 섹션을 찾지 못하면 전문을 넣고 그 사실을 알림으로 남긴다(규칙이 조용히 빠지지 않게). 여기 넣은 설계 규약은 `analyzer-rules`의 판정 기준이 된다.
+- **`rule_docs`** — 구현 단계에서 **항상 함께 넘기는** 규칙 문서. 문자열이면 문서 전문, 객체면 지정한 섹션만 넣는다. 섹션을 찾지 못하면 전문을 넣고 그 사실을 알림으로 남긴다(규칙이 조용히 빠지지 않게). 여기 넣은 설계 규약은 `analyzer-rules`와 `reviewer`가 보는 기준이 된다.
 - **`commit_rule_docs`** — 커밋 메시지·단위 규칙. 따로 두는 이유는 커밋 규칙이 커밋할 때만 필요하고, 커밋 담당 에이전트는 문서를 탐색할 도구가 없어 경로를 명시로 받아야 하기 때문이다.
-- **`reference_docs`** — step 문서가 그 경로를 언급할 때만 주입하는 참고 문서.
+- **`reference_docs`** — step 문서가 그 경로를 언급할 때만 함께 넘기는 참고 문서.
 - **`template_dir`** — spec 문서 템플릿을 저장소 것으로 쓰고 싶을 때만 지정한다. 없으면 플러그인 내장 템플릿을 쓰므로 준비 없이도 시작할 수 있다. 진행 checklist는 템플릿에서 오지 않는다 — 단계 정의는 플러그인의 `stages.json`만 가진다.
-- **`spec_root`** — spec 작업 공간이 사는 곳(기본 `docs/specs`).
-- **`methodologies`** — 켤 방법론 이름 목록. 여러 개를 함께 켤 수 있고, 비어 있으면 코어만 돈다.
+- **`spec_root`** — spec 폴더가 사는 곳(기본 `docs/specs`).
+- **`methodologies`** — 켤 방법론 이름 목록. 여러 개를 함께 켤 수 있고, 비어 있으면 기본 흐름만 돈다.
 - **`merge.agent`** — agent가 내는 PR 머지 명령을 어떻게 다룰지: `ask`(기본) · `root_sync` · `deny`. 각 값의 뜻은 위 "Root Sync 전 머지 검사" 절에 있다.
 - **`workspace`** — 작업 공간을 어떻게 만드는지. 저장소마다 브랜치 모델이 달라 값으로 받는다.
   - `mode`: `worktree`(기본, 메인 체크아웃을 건드리지 않음) 또는 `branch`
@@ -410,9 +408,10 @@ cat ~/.claude/settings.json .claude/settings.json .claude/settings.local.json
 하네스는 저장소 파일을 대신 고치지 않는다. 아래 규칙은 저장소가 직접 추가한다.
 
 ```gitignore
-/.spec-harness/run/                         # 실행 중 생기는 진행 마커·로그 상태 (휘발)
+# 실행 중 생기는 진행 마커·로그 상태 (지워도 된다)
+/.spec-harness/run/
 
-# spec 작업 공간 — 정본은 추적하고 진행 상태·실행 부산물만 무시한다
+# spec 폴더 — 문서는 추적하고 진행 상태·실행 부산물만 무시한다
 docs/specs/**/workflow-checklist.json
 docs/specs/**/phases/index.json
 docs/specs/**/phases/*/index.json
@@ -420,13 +419,13 @@ docs/specs/**/phases/*/step*-ac-output.json
 docs/specs/**/phases/*/logs/
 ```
 
-**spec 문서를 추적하는 이유**: 루트 상태 문서 갱신은 Root Sync까지 미뤄지는데, 그 사이 리뷰어는 "루트가 왜 코드와 안 맞나"를 판단할 근거가 없다. 그 근거가 spec 문서에 있으므로 PR 에서 보여야 한다. Stage 8 진입 때 한 번 커밋되고, Root Sync에서 `_archive/`로 옮겨진다.
+**spec 문서를 추적하는 이유**: 루트 문서 갱신은 Root Sync까지 미뤄지는데, 그 사이 리뷰어는 "루트가 왜 코드와 안 맞나"를 판단할 근거가 없다. 그 근거가 spec 문서에 있으므로 PR 에서 보여야 한다. Stage 8 진입 때 한 번 커밋되고, Root Sync에서 `_archive/`로 옮겨진다.
 
-`**`로 쓰는 이유: Root Sync가 작업 폴더를 `_archive/pr-<번호>-<이름>/`로 옮기면 경로가 한 단계 깊어진다. `*` 한 개면 옮긴 뒤 이 파일들이 무시되지 않아, 승격 대상이 아닌 실행 부산물이 아카이브에 들어간다.
+`**`로 쓰는 이유: Root Sync가 spec 폴더를 `_archive/pr-<번호>-<이름>/`로 옮기면 경로가 한 단계 깊어진다. `*` 한 개면 옮긴 뒤 이 파일들이 무시되지 않아, 옮길 대상이 아닌 실행 부산물이 아카이브에 들어간다.
 
 `docs/specs`가 아닌 곳을 쓰면 경로를 그 값으로 바꾼다(`spec_root` 설정).
 
-`.spec-harness/config.json`은 **커밋한다** — 그 저장소의 규칙 선언이라 팀이 공유해야 한다. `.spec-harness/` 전체를 무시하면 설정까지 빠져 규칙 주입이 조용히 사라진다.
+`.spec-harness/config.json`은 **커밋한다** — 그 저장소의 규칙 선언이라 팀이 공유해야 한다. `.spec-harness/` 전체를 무시하면 설정까지 빠져 규칙 문서가 조용히 빠진다.
 
 ---
 
@@ -434,7 +433,7 @@ docs/specs/**/phases/*/logs/
 
 서버와 앱처럼 한 제품을 여러 저장소가 만들면, **무엇을 만들고 어떻게 확인할지**(요구·시나리오·계약)를 공유 docs 저장소에서 확정해 버전 태그(`F01-v1`)로 동결하고, 각 구현 저장소가 그 버전을 입력으로 구현한다. 한 저장소가 같은 요구를 따로 정하면 플랫폼 사이가 어긋나기 때문이다.
 
-- docs 저장소에서 `/spec-harness:feature`로 진행한다. 흐름·게이트·버전 규칙·작업 종류별 진입점은 `skills/feature/SKILL.md`가 정본이다.
+- docs 저장소에서 `/spec-harness:feature`로 진행한다. 흐름·게이트·버전 규칙·작업 종류별 진입점은 `skills/feature/SKILL.md`에 있다.
 - 기능 spec 폴더 위치는 설정 `feature_root`(기본 `features`)로 바꿀 수 있다.
 - docs 저장소의 `.gitignore`:
 
@@ -443,7 +442,7 @@ docs/specs/**/phases/*/logs/
   features/*/workflow-checklist.json
   ```
 
-- 구현 저장소에서 `/spec-harness:implement`로 진행한다. `import-feature`가 docs 저장소의 동결 태그에서 기능 spec을 `upstream/`에 읽기 전용으로 가져오고, 사본이 바뀌었거나 docs 저장소에 비호환 새 버전이 있으면 preflight가 막는다. 흐름은 `skills/implement/SKILL.md`가 정본이다.
+- 구현 저장소에서 `/spec-harness:implement`로 진행한다. `import-feature`가 docs 저장소의 동결 태그에서 기능 spec을 `upstream/`에 읽기 전용으로 가져오고, 가져온 기능 spec이 바뀌었거나 docs 저장소에 기존 구현에서 고칠 것이 있는 새 버전이 있으면 preflight가 막는다. 흐름은 `skills/implement/SKILL.md`에 있다.
 - 구현 저장소의 설정에 docs 저장소의 로컬 체크아웃을 적는다. `.gitignore`는 run과 같다.
 
   ```json
@@ -456,9 +455,9 @@ docs/specs/**/phases/*/logs/
 
 ## 🧪 방법론 (opt-in)
 
-10 Stage 흐름과 게이트는 방법론 무관 코어다. 그 위에 "일하는 방식"을 얹고 싶을 때만 켠다. **아무것도 켜지 않는 것이 정상 상태**다.
+10 Stage 흐름과 게이트는 방법론과 무관한 기본 흐름이다. 그 위에 "일하는 방식"을 얹고 싶을 때만 켠다. **아무것도 켜지 않는 것이 정상 상태**다.
 
-방법론 하나는 `methodologies/<이름>/manifest.yaml` 선언 하나로 자기 기여물을 밝힌다.
+방법론 하나는 `methodologies/<이름>/manifest.yaml` 선언 하나로 방법론이 더하는 것을 밝힌다.
 
 | 선언 항목 | 하네스가 하는 일 |
 | --- | --- |
@@ -470,7 +469,7 @@ docs/specs/**/phases/*/logs/
 | `requires` · `conflicts_with` | 여러 개를 켰을 때 조합이 유효한지 검증한다 |
 | `min_engine_version` | 플러그인 버전이 그보다 낮으면 적용하지 않고 알린다(그 방법론이 쓰는 연결 지점이 아직 없어 요구가 조용히 빠진다) |
 
-> 🛡️ **방법론은 자기 검사를 더할 수 있을 뿐, 코어 게이트를 끄지도 느슨하게 하지도 못한다.** 위험영역 확정, 실행 전 검사, 검증 통과, 사람 승인 지점은 어떤 방법론도 무력화할 수 없다.
+> 🛡️ **방법론은 자기 검사를 더할 수 있을 뿐, 기본 흐름의 게이트를 끄지도 느슨하게 하지도 못한다.** 위험영역 확정, 실행 전 검사, 검증 통과, 사람 승인 지점은 어떤 방법론도 끄거나 건너뛸 수 없다.
 
 `enforcement: instance-defined`인 검사는 **무엇을 검사할지만** 방법론이 정하고, 그것을 무엇으로 강제할지는 저장소가 정한다. 강제 수단이 없으면 검사 결과는 리포트로만 남는다.
 
@@ -479,7 +478,7 @@ docs/specs/**/phases/*/logs/
 서로 독립이라 하나만 켜도, 둘을 함께 켜도 된다.
 
 - **`ddd`** — 도메인 모델에 불변식·상태 전이·경계를 캡슐화하는 전술 설계 규율. 전용 에이전트 `domain-expert`가 설계를 함께 잡고 검토한다.
-- **`bdd`** — 행위를 상황·행위·기대 결과로 적고, 그 시나리오가 검증의 단위가 되는 규율. 코어는 요구마다 "무엇을 어떻게 확인하는가"를 붙이는 데까지만 하는데, 켜면 그것이 구조화된 시나리오 문서가 된다. 동시성·멱등성·실패처럼 빠뜨리기 쉬운 경우를 검사하고, 시나리오에 적은 값·경계가 테스트에서 새지 않는지 본다.
+- **`bdd`** — 행위를 상황·행위·기대 결과로 적고, 그 시나리오가 검증의 단위가 되는 규율. 기본 흐름은 요구마다 "무엇을 어떻게 확인하는가"를 붙이는 데까지만 하는데, 켜면 그것이 구조화된 시나리오 문서가 된다. 동시성·멱등성·실패처럼 빠뜨리기 쉬운 경우를 검사하고, 시나리오에 적은 값·경계가 테스트에서 새지 않는지 본다.
 
 둘은 겹치지 않는다 — `bdd`는 **무엇을 검증할지**, `ddd`는 **그 규칙을 코드 어디에 둘지**를 본다.
 
@@ -487,12 +486,12 @@ docs/specs/**/phases/*/logs/
 
 ## 🗂️ 상태·산출 파일
 
-**spec 폴더 아래에서 `.gitignore` 대상은 진행 상태·실행 부산물뿐이다.** 정본은 Stage 8 진입 때 커밋되어 PR 에서 보이고, Root Sync에서 `_archive/pr-<번호>-<spec명>/`로 옮겨진다.
+**spec 폴더 아래에서 `.gitignore` 대상은 진행 상태·실행 부산물뿐이다.** 나머지는 Stage 8 진입 때 커밋되어 PR 에서 보이고, Root Sync에서 `_archive/pr-<번호>-<spec명>/`로 옮겨진다.
 
 | 파일 | 누가 쓰나 | 누가 읽나 |
 | --- | --- | --- |
-| `spec.md`·`plan.md`·설계 문서·`scenarios.md` | 사람 · 메인 | 검사관 · developer · Root Sync 승격 |
-| `analysis.json` | 메인(검사관 리포트 병합) | `close-analyze` · `preflight` · Root Sync 승격 |
+| `spec.md`·`plan.md`·설계 문서·`scenarios.md` | 사람 · 메인 | 검사관 · developer · Root Sync |
+| `analysis.json` | 메인(검사관 리포트 병합) | `close-analyze` · `preflight` · Root Sync |
 | `phases/<phase>/step<N>.md` | Steps(6) | developer · reviewer · `lint-steps` |
 | `workflow-checklist.json` | `init-checklist`(생성) · 각 단계 · `close-analyze` · `set-stage` | `preflight` · 머지 검사 hook |
 | `phases/**/index.json` | recorder(시도 이력 포함) · finalizer | preflight · 재실행 skip 판단 |
@@ -501,7 +500,7 @@ docs/specs/**/phases/*/logs/
 | `logs/<role>.log` | 로깅 hook | 사람(사후 분석) |
 
 - **`_archive`로 옮기는 것**: 모든 `.md`와 `analysis.json`·`execution-history.json`. 무엇을 발견하고 어떻게 처리했는지, 실행이 어디서 몇 번 되돌아갔는지를 나중에 되짚을 근거다.
-- **함께 사라지는 것**: 진행 상태(`index.json`·checklist)와 실행 부산물(`ac-output`·`logs`). 추적되지 않아 작업 폴더를 비울 때 없어진다.
+- **함께 사라지는 것**: 진행 상태(`index.json`·checklist)와 실행 부산물(`ac-output`·`logs`). 추적되지 않아 spec 폴더를 비울 때 없어진다.
 - 타임스탬프는 KST(+09:00).
 
 ---

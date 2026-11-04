@@ -6,19 +6,19 @@
 
 1. **slug·type 확정**: 사용자의 한 줄 작업 설명에서 `<spec-name>` slug와 작업 종류(type)를 정한다. 종류 값은 설정(`.spec-harness/config.json`)의 `workspace.types`에서 고르고, 그 목록이 비어 있으면 **하네스가 값을 만들지 않고** 최근 브랜치 이름(`git branch -a`)에서 쓰이는 형태를 보거나 사용자에게 짧게 확인한다. spec 내용을 다 채우기 전에 *이름만* 먼저 정하는 것이다.
 2. **작업 공간 생성·이동**: 설정의 `workspace`를 따른다.
-   - `mode: "worktree"`(기본) — `worktree_pattern`이 정한 디렉터리에 워크트리를 만들고 그 안으로 이동한다. 메인 체크아웃을 건드리지 않아 작업이 섞이지 않는다.
+   - `mode: "worktree"`(기본) — `worktree_pattern`이 정한 디렉터리에 작업 공간(worktree)을 만들고 그 안으로 이동한다. 메인 체크아웃을 건드리지 않아 작업이 섞이지 않는다.
    - `mode: "branch"` — 현재 체크아웃에서 브랜치만 새로 만들어 작업한다.
    - 브랜치 이름은 `branch_pattern`, 분기 기준은 `base_ref`를 쓴다. `base_ref`가 없으면 **저장소의 기본 브랜치**를 쓴다(하네스가 특정 브랜치 이름을 가정하지 않는다).
    - 이름 형식의 `<type>`·`<name>`은 위에서 정한 종류·slug로 치환한다.
 
    만든 뒤 그 안(또는 그 브랜치)으로 이동하고, 이동 직후 `pwd`와 `git branch --show-current`로 **의도한 위치·브랜치인지 반드시 확인한다.** 이후 모든 문서 작성·`execute.py` 실행은 이 작업 공간의 루트 기준이다.
-3. **스캐폴딩(checklist 생성)**: worktree 안에 `<SPEC_ROOT>/<spec-name>/` 폴더를 만들고 checklist를 생성한다: `python3 "<SKILL_DIR>/scripts/execute.py" init-checklist <SPEC_ROOT>/<spec-name>`. 이 시점에 10개 Stage 진행 추적 checklist가 존재한다(실행 게이트가 이를 읽는다). **설계 문서(plan·architecture·data-model 등)는 지금 복사하지 않는다 — Design(5)에서 필요한 것만 템플릿 폴더에서 꺼내 만든다.** `spec.md`도 아래에서 새로 만든다.
+3. **스캐폴딩(checklist 생성)**: worktree 안에 `<SPEC_ROOT>/<spec-name>/` 폴더를 만들고 checklist를 생성한다: `python3 "<SKILL_DIR>/scripts/execute.py" init-checklist <SPEC_ROOT>/<spec-name>`. 이 시점에 10개 Stage 진행 추적 checklist가 존재한다(실행 게이트가 이를 읽는다). **설계 문서(plan·architecture·data-model 등)는 지금 복사하지 않는다 — Design(5, 설계)에서 필요한 것만 템플릿 폴더에서 꺼내 만든다.** `spec.md`도 아래에서 새로 만든다.
 
 > worktree·checklist는 spec당 한 번만 만든다. 재실행이면 이미 있으므로 건너뛴다.
 
 ## spec.md 초안 작성
 
-**핵심 방식: 초안을 먼저 뽑는다.** 길게 대화한 뒤 받아쓰는 게 아니라, 가진 입력으로 `spec.md` 템플릿(`<TEMPLATE_DIR>/spec.md`)을 복사해 *지금* 채운다. 긴 질의응답은 이 단계가 아니라 Clarify(3)에서 일어난다. Specify의 목표는 "완성된 spec"이 아니라 **"빈칸이 마커·가정으로 드러난 초안"**이다.
+**핵심 방식: 초안을 먼저 뽑는다.** 길게 대화한 뒤 받아쓰는 게 아니라, 가진 입력으로 `spec.md` 템플릿(`<TEMPLATE_DIR>/spec.md`)을 복사해 *지금* 채운다. 긴 질의응답은 이 단계가 아니라 Clarify(3, 모호함 해소)에서 일어난다. Specify의 목표는 "완성된 spec"이 아니라 **"빈칸이 마커·가정으로 드러난 초안"**이다.
 
 > **활성 방법론의 요구 산출물**: 각 manifest의 `requires_in_spec`에 적힌 산출물을 이 spec에 포함시킨다. 지금 채울 수 없으면 임의로 메우지 말고 **미확정 마커로 남겨** Clarify(3)에서 확정한다. 그 산출물의 형식이 방법론 템플릿에 있으면 그것을 쓴다. 설계 판단이 필요하면 그 방법론의 `consult` 모드 agent를 `Task`로 띄워 함께 잡는다(예: ddd → `spec-harness:domain-expert`에 `consult 모드`임을 명시).
 
@@ -36,7 +36,7 @@
   - 기본값이 없으면 → `[NEEDS CLARIFICATION: 질문]` 마커로 남긴다(Clarify에서 해소).
 - **위험영역은 기본값 금지.** 결제·인증·데이터 모델·상태 전이가 미확정이면 가정으로 메우지 않고 **반드시 마커**로 남긴다.
 - **누락 금지.** 필수 섹션은 비우지 않는다. 해당 없으면 "해당 없음"이라고 적는다(빈 섹션이 곧 미검토 신호).
-- 요구사항·완료 기준에는 ID(`FR-001`·`SC-001`)를 붙인다(Analyze가 이 ID로 커버리지를 추적).
+- 요구사항·완료 기준에는 ID(`FR-001`·`SC-001`)를 붙인다(Analyze(7, 문서 검사)가 이 ID로 커버리지를 추적).
 
 ## 모호함을 마커로 남길 신호
 
@@ -49,7 +49,7 @@
 
 산출: `<SPEC_ROOT>/<spec-name>/spec.md` (배경·시나리오·범위·요구사항·데이터 모델·완료 기준·제약·가정).
 
-## 작성 전 루트 문서 정합성 확인 (필수)
+## 작성 전 루트 문서와 부딪히는지 확인 (필수)
 
 스펙 방향을 확정하기 전에, 작업이 기존 결정·원칙과 충돌하는지 **agent가 먼저 확인**한다. 임의로 방향을 정한 뒤 "충돌 지점을 검토해 달라"고 사용자에게 떠넘기지 않는다. 충돌이 발견되면 그 지점을 마커로 남기거나, 아래 제안 형식으로 사용자에게 방향을 묻는다.
 
@@ -63,7 +63,7 @@
 | 데이터 모델·테이블·제약 | `docs/db-schema.md` |
 | API 추가·변경 | `docs/api-spec.md` |
 
-3. **제안 형식**: 확인 결과를 아래 형식으로 제시한다. 이 형식은 agent가 문서를 실제로 확인했다는 근거이며, 사용자는 정합 라벨만 보고 판단할 수 있다.
+3. **제안 형식**: 확인 결과를 아래 형식으로 제시한다. 이 형식은 agent가 문서를 실제로 확인했다는 근거이며, 사용자는 선택지마다 붙은 일치·위반 표시만 보고 판단할 수 있다.
 
 ```
 ## 제안
