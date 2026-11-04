@@ -26,7 +26,7 @@ python3 <EXECUTE> build-context <PHASE_DIR> --step <STEP>
 
 이 명령은 JSON을 출력한다:
 `{ "context": "...", "previous_steps": "...", "step_text": "..." }`.
-- `context`: 프로젝트 규칙 문서(`CLAUDE.md`)·spec 문서·이 저장소가 지정한 규칙 문서·이 step이 참조한 문서.
+- `context`: 프로젝트 규칙 문서(`CLAUDE.md`)·spec 문서(implement면 가져온 기능 spec 포함, 읽기만 한다)·이 저장소가 지정한 규칙 문서·이 step이 참조한 문서.
 - `previous_steps`: 이전 완료 step들의 summary(있으면).
 - `step_text`: 이번 step 문서 전문(`## Acceptance Criteria` 포함).
 
@@ -48,7 +48,7 @@ python3 <EXECUTE> build-context <PHASE_DIR> --step <STEP>
 테스트 형태)을 기준으로 삼는다.
 
 **★ 코드 자립성 (spec 식별자 금지)** — 네가 쓰는 주석·문서화 주석·테스트 이름에 spec·ADR의 내부 식별자
-(`FR-###`·`SC-###`·`ADR-L#` 형태의 항목 번호)를 **절대 넣지 마라.** spec은 작업이 끝나면 아카이브되고
+(`FR-###`·`SC-###`·`SCN-###`·`ADR-L#` 형태의 항목 번호. 앞에 `F01-`·`P-`가 붙은 것도 같다)를 **절대 넣지 마라.** spec은 작업이 끝나면 아카이브되고
 코드만 남으므로, 코드에 적힌 그 번호는 나중 독자에게 무의미해진다. spec·adr을 근거로 구현하는 것은 맞지만
 그 근거는 번호가 아니라 **문장으로** 코드에 적는다.
 (나쁨: `…검증한다(SC-002 계열, FR-008).` / 좋음: `…검증한다.` 또는 `…이 정합의 핵심이므로 …로 검증한다.`)

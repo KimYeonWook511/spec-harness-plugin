@@ -17,7 +17,13 @@ SPEC_DOC_FILES = [
     "api-spec.md",
     "adr.md",
     "scenarios.md",
+    "verification.md",
+    "screens.md",
+    "data-layer.md",
 ]
+
+# implement가 docs 저장소에서 가져온 기능 spec. 구현이 지켜야 할 요구·시나리오·계약이다.
+UPSTREAM_DOC_FILES = ["spec.md", "scenarios.md", "contract.md"]
 
 
 def extract_section(text: str, heading: str) -> Optional[str]:
@@ -109,12 +115,8 @@ def list_reference_docs(root_path: Path, config: dict) -> tuple[list[Path], list
 
 def list_spec_docs(spec_dir: Path) -> list[Path]:
     """spec 폴더의 기본 문서 중 존재하는 것만 순서대로 반환한다."""
-    docs: list[Path] = []
-    for filename in SPEC_DOC_FILES:
-        path = spec_dir / filename
-        if path.exists():
-            docs.append(path)
-    return docs
+    names = [f"upstream/{n}" for n in UPSTREAM_DOC_FILES] + SPEC_DOC_FILES
+    return [spec_dir / n for n in names if (spec_dir / n).exists()]
 
 
 def build_methodology_notice(config: dict) -> tuple[str, list[str]]:
@@ -171,7 +173,19 @@ def load_step_documents(
 
     for doc in list_spec_docs(spec_dir):
         rel_path = doc.relative_to(root_path).as_posix()
-        sections.append(f"## spec 문서 ({rel_path})\n\n{doc.read_text(encoding='utf-8')}")
+        label = "가져온 기능 spec, 읽기만" if doc.parent.name == "upstream" else "spec 문서"
+        sections.append(f"## {label} ({rel_path})\n\n{doc.read_text(encoding='utf-8')}")
+
+    upstream = spec_dir / "upstream"
+    if upstream.is_dir():
+        rest = sorted(
+            f.relative_to(root_path).as_posix() for f in upstream.rglob("*")
+            if f.is_file() and f.relative_to(upstream).as_posix() not in UPSTREAM_DOC_FILES
+        )
+        if rest:
+            sections.append(
+                "## 가져온 기능 spec의 나머지 (읽기만, 필요하면 Read)\n\n" + "\n".join(f"- `{r}`" for r in rest)
+            )
 
     methodology_block, methodology_notes = build_methodology_notice(config)
     notes.extend(methodology_notes)

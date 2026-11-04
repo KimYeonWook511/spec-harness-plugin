@@ -127,6 +127,7 @@ ID: 가져온 것은 그대로(`F01-FR-003`, `F01-SCN-012`), 이 플랫폼에서
 
 `<RUN_DIR>/references/stages/execution.md`·`pr-review.md`·`root-sync.md`를 따른다. 다른 점:
 
+- developer는 가져온 요구·시나리오·계약과 `verification.md`를 함께 받는다. `upstream/`은 고치지 않는다.
 - preflight가 `upstream/`이 그대로인지와 docs 저장소의 새 버전을 함께 본다. major 새 버전이 있으면 막히고, minor 새 버전은 `upstream_notes`로 알린다. 알림이 오면 사용자에게 전한다.
 - "명세를 먼저 커밋한다"에서 커밋하는 파일과 Root Sync에서 `_archive`로 옮기는 파일에 `upstream.json`·`upstream/`·`review-design.json`을 넣는다. 나중에 이 구현이 어느 버전을 기준으로 했는지 저장소 안에서 확인할 수 있다.
 - Root Sync가 끝나면 docs 저장소 `index.md`의 이 플랫폼 열을 구현한 버전으로 갱신하는 PR을 낼지 사용자에게 묻는다.
