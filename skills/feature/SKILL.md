@@ -77,7 +77,7 @@ ID는 `F01-FR-001`, `F01-SC-001`, `F01-SCN-001`처럼 기능 번호를 붙인다
 | Spec Review(spec 검사) | CRITICAL은 고치거나 근거를 남기고 넘긴다 | `close-review` |
 | Contract Review(계약 검사) | CRITICAL은 고치거나 근거를 남기고 넘긴다 + Spec Review 이후 spec·시나리오 불변 | `close-review` |
 | 두 검사 | `start-review`로 고정한 문서가 닫을 때까지 그대로다(바뀌면 다시 검사, 또는 사용자 확인 뒤 `--edited`로 사유 기록) | `close-review` |
-| Freeze(동결) | 두 검사가 닫혔고 그 뒤 문서가 바뀌지 않았다, CHANGELOG·기능 목록에 항목이 있다, 버전 규칙을 지켰다 | `freeze` |
+| Freeze(동결) | 두 검사가 닫혔고 그 뒤 문서가 바뀌지 않았다, CHANGELOG·기능 목록에 항목이 있다, 버전 규칙을 지켰다, `spec.md`의 의존 기능이 태그로 있다 | `freeze` |
 | Freeze | 동결된다는 사실을 알리고 사용자가 진행을 밝혔다 | 사용자가 답해야 넘어간다 |
 | Freeze | 태그는 머지된 깨끗한 체크아웃에서만 | `freeze --tag` |
 

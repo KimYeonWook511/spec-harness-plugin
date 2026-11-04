@@ -1087,6 +1087,13 @@ def freeze_problems(spec_dir: Path, root: Path, stage_set: dict, version: str) -
     if not index.exists() or not re.search(rf"^\|\s*{fid}\s*\|", index.read_text(encoding="utf-8"), re.M):
         problems.append(f"기능 목록({index.relative_to(root) if index.is_relative_to(root) else index})에 {fid} 행이 없다.")
 
+    # 의존 기능은 먼저 동결돼 있어야 이 기능이 그 버전을 기준으로 삼을 수 있다.
+    spec_md = spec_dir / "spec.md"
+    dep_line = re.search(r"^- 의존:(.*)$", spec_md.read_text(encoding="utf-8"), re.M) if spec_md.exists() else None
+    for dep in re.findall(r"F\d+-v\d+(?:\.\d+)?", dep_line.group(1) if dep_line else ""):
+        if git_ops.run_git(str(root), "rev-parse", "-q", "--verify", f"refs/tags/{dep}").returncode != 0:
+            problems.append(f"의존 기능 {dep}의 태그가 없다. 그 기능을 먼저 동결한다.")
+
     # 버전 규칙: 동결 문서의 뜻이 바뀌면 major, 그대로면 minor.
     tags = [t for t in git_ops.run_git(str(root), "tag", "-l", f"{fid}-v*").stdout.split() if _parse_version(t)]
     if git_ops.run_git(str(root), "rev-parse", "-q", "--verify", f"refs/tags/{version}").returncode == 0:
