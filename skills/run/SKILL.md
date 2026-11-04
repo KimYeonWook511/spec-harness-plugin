@@ -48,6 +48,7 @@ description: 이 저장소에서 "harness로 spec 실행", "하네스로 이 pha
 | Analyze(7) | 검토 후 중단 | 작성한 문서 경로를 보고하고 사용자의 검토 응답을 받았다. "진행해"는 승인이 아니다 | 사용자가 답해야 넘어간다 |
 | Execution(8) | 실행 승인 | 사용자가 실행을 승인했다 | 사용자가 답해야 넘어간다 |
 | Execution(8) | 실행 전 검사 | 1~7이 모두 `completed`이고 Stage 8이 `pending` 또는 `in_progress`다 | `preflight`가 판정하고 막는다 |
+| Execution(8) | push 대상 | `execution.push`가 true면 원격 `origin`이 있다 | `preflight`가 판정하고 막는다 |
 | Execution(8) | AC 통과 | 각 명령의 exit code가 기대값과 일치한다 | `verify-ac`가 exit code로 판정해 파일에 남기지만, `execute.js`가 보는 값은 **developer가 반환한 것**이다 |
 | Execution(8) | 보고 대조 | developer가 보고한 AC 결과가 파일에 기록된 것과 일치한다 | `reviewer`가 파일을 읽어 판정하고 `execute.js`가 막는다 |
 | Execution(8) | 검토 승인 | reviewer 판정이 `approved`다 | `reviewer`가 판정하고 `execute.js`가 막는다 |
@@ -67,7 +68,7 @@ description: 이 저장소에서 "harness로 spec 실행", "하네스로 이 pha
 | `reviewer` | 전용 에이전트 `spec-harness:reviewer`. 읽기만 해서 스스로 막지 못한다 |
 | 메인 에이전트 | 이 skill을 실행하는 에이전트 |
 
-**모델 판단이 하나도 끼지 않는 게이트는 다섯이다** — 실행 전 검사, step 형식, 분석 최신, step 3회 시도 한도, 중단된 step 재실행. 이 다섯은 스크립트가 파일과 자기 데이터(checklist·문서 해시·파서 결과·시도 횟수·step status)만 보고 정한다.
+**모델 판단이 하나도 끼지 않는 게이트는 여섯이다** — 실행 전 검사, push 대상, step 형식, 분석 최신, step 3회 시도 한도, 중단된 step 재실행. 이 여섯은 스크립트가 파일과 자기 데이터(checklist·문서 해시·파서 결과·시도 횟수·step status·git 원격)만 보고 정한다.
 
 Root Sync의 게이트는 통과 조건에 checklist 상태가 들어가고, 그것은 메인이 찍는다. 다만 `_archive`로 옮긴 문서가 실제로 커밋됐는지는 git으로 확인하므로 **`_archive`로 옮기기를 건너뛴 것은 드러난다.** 이 hook은 agent의 Bash 명령만 본다 — 사람이 GitHub 웹에서 머지 버튼을 누르는 것은 막지 못한다.
 

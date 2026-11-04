@@ -317,6 +317,12 @@ def cmd_preflight(args) -> int:
         emit(bad or blocked)
         return 1
 
+    # finalize가 origin으로 push한다. 없으면 모든 step을 끝낸 뒤에야 실패한다.
+    if index.get("execution", {}).get("push", True) and git_ops.run_git(p["root"], "remote", "get-url", "origin").returncode != 0:
+        emit({"ok": False, "error": "원격 origin이 없는데 phase index의 execution.push가 true다. "
+              "원격을 연결하거나 execution.push를 false로 둔다."})
+        return 1
+
     # hook이 phase별 로그 디렉터리(<phase>/logs)를 찾도록 active-phase 마커를 남긴다.
     # (preflight가 이 마커를 쓰고, hook이 읽는다.)
     try:
@@ -334,6 +340,7 @@ def cmd_preflight(args) -> int:
         for s in index.get("steps", [])
     ]
     execution = index.get("execution", {})
+
 
     emit({
         "ok": True,
