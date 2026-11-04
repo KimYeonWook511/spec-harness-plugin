@@ -366,7 +366,7 @@ cat ~/.claude/settings.json .claude/settings.json .claude/settings.local.json
 
 ## 🛠️ 저장소 설정 (선택)
 
-하네스는 어느 문서가 그 저장소의 규칙인지 알지 않는다. 규칙으로 읽을 문서는 저장소가 직접 나열한다. 설정이 없으면 문서 주입 없이 코어 흐름만 돈다(오류가 아니다).
+`CLAUDE.md`는 항상 규칙으로 읽는다. 그 밖에 규칙으로 읽을 문서는 저장소가 직접 나열한다. 설정이 없으면 `CLAUDE.md`만으로 코어 흐름이 돈다(오류가 아니다).
 
 `.spec-harness/config.json` — 아래 문서 이름·경로는 모두 **예시**다. 하네스는 특정 파일 이름을 요구하지 않는다.
 
