@@ -31,6 +31,8 @@ DEFAULTS: dict = {
     "spec_root": "docs/specs",
     # 기능 spec이 사는 곳(docs 저장소 루트 기준). feature skill이 쓴다.
     "feature_root": "features",
+    # 구현 저장소가 기능 spec을 가져오는 docs 저장소. {"path": 로컬 체크아웃 경로, "on_newer_compatible": "warn"|"block"}
+    "upstream": None,
     # 이 저장소가 켠 방법론 이름 목록(예: ["ddd"]). 비어 있으면 방법론 무관 코어만 돈다.
     # 방법론은 검사·요구 산출물·전용 agent를 더하며, 코어 게이트를 끄지는 못한다.
     "methodologies": [],

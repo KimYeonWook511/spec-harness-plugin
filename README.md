@@ -126,6 +126,7 @@ flowchart TD
 | --- | --- |
 | 📖 **skill `guide`** | 안내(`/spec-harness:guide`). 사용자가 겪을 흐름 — 개입 지점, 자동 구간, 막혔을 때 할 일 |
 | 🎬 **skill `run`** | 진입점(`/spec-harness:run`). 10단계를 지휘한다. 상세 동작·데이터 계약의 정본 |
+| 🔨 **skill `implement`** | 기능 구현(`/spec-harness:implement`). 구현 저장소에서 동결된 기능 spec 버전을 가져와 읽기 전용으로 두고 설계·구현한다 |
 | 🧱 **skill `feature`** | 기능 spec(`/spec-harness:feature`). 여러 저장소가 한 제품을 만들 때, 공유 docs 저장소에서 기능 spec을 만들고 고치고 버전 태그로 동결한다 |
 | 🔁 **skill `retro`** | 회고(`/spec-harness:retro`). 끝난 spec들의 실행 기록에서 반복되는 실패를 찾아 규칙으로 고친다. 10 Stage 밖이다 |
 | ⚙️ **workflow `execute`** | 실행 오케스트레이터(`/spec-harness:execute`). step마다 구현→검증→검토→커밋→기록 |
@@ -358,7 +359,8 @@ cat ~/.claude/settings.json .claude/settings.json .claude/settings.local.json
 - 진입: `/spec-harness:run`
 - 실행 워크플로: `/spec-harness:execute`
 - 회고: `/spec-harness:retro`
-- 기능 spec (저장소를 나눌 때): `/spec-harness:feature`
+- 기능 spec (저장소를 나눌 때, docs 저장소): `/spec-harness:feature`
+- 기능 구현 (저장소를 나눌 때, 구현 저장소): `/spec-harness:implement`
 
 ---
 
@@ -428,7 +430,7 @@ docs/specs/**/phases/*/logs/
 
 ---
 
-## 🧱 저장소를 나눌 때 — `feature`
+## 🧱 저장소를 나눌 때 — `feature`·`implement`
 
 서버와 앱처럼 한 제품을 여러 저장소가 만들면, **무엇을 만들고 어떻게 확인할지**(요구·시나리오·계약)를 공유 docs 저장소에서 확정해 버전 태그(`F01-v1`)로 동결하고, 각 구현 저장소가 그 버전을 입력으로 구현한다. 한 저장소가 같은 요구를 따로 정하면 플랫폼 사이가 어긋나기 때문이다.
 
@@ -440,6 +442,15 @@ docs/specs/**/phases/*/logs/
   /.spec-harness/run/
   features/*/workflow-checklist.json
   ```
+
+- 구현 저장소에서 `/spec-harness:implement`로 진행한다. `import-feature`가 docs 저장소의 동결 태그에서 기능 spec을 `upstream/`에 읽기 전용으로 가져오고, 사본이 바뀌었거나 docs 저장소에 비호환 새 버전이 있으면 preflight가 막는다. 흐름은 `skills/implement/SKILL.md`가 정본이다.
+- 구현 저장소의 설정에 docs 저장소의 로컬 체크아웃을 적는다. `.gitignore`는 run과 같다.
+
+  ```json
+  { "upstream": { "path": "../<docs 저장소>", "on_newer_compatible": "warn" } }
+  ```
+
+- 구현 저장소에서도 사용자에게 보이는 동작이나 계약을 바꾸지 않는 플랫폼 내부 작업은 `run`으로 한다.
 
 ---
 

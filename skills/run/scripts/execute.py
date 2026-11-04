@@ -22,6 +22,7 @@ JavaScript workflow(spec-harness:execute)로 옮겨갔고, execute.py는 **workf
   start-review    검사관을 띄우기 직전에 검사 대상 문서의 지문을 고정
   close-review    stages.json에 정의된 검사 단계를 확인하고 닫음 + fingerprint 기록
   freeze          기능 spec 동결 조건 확인, --tag면 버전 태그 생성
+  import-feature  docs 저장소의 동결 태그에서 기능 spec을 upstream/으로 가져옴 (implement)
 
 설계 원칙:
   - 함수 기반: 셔틀 상태가 없고 각 서브커맨드가 한 번 실행되고 끝이므로 클래스가 불필요.
@@ -30,9 +31,11 @@ JavaScript workflow(spec-harness:execute)로 옮겨갔고, execute.py는 **workf
 """
 
 import argparse
+import fnmatch
 import hashlib
 import json
 import re
+import subprocess
 import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -167,9 +170,18 @@ def update_workflow_item(checklist_dir: Path, title: str, status: str) -> bool:
     return matched
 
 
+def analysis_review(spec_dir: Path) -> tuple[dict, dict]:
+    """(단계 정의, Analyze 검사 정의). checklist의 workflow를 따르고, 없으면 run의 것이다."""
+    checklist = spec_dir / "workflow-checklist.json"
+    stage_set = load_stage_set(read_json(checklist).get("workflow")) if checklist.exists() else None
+    if not stage_set or "Analyze" not in stage_set.get("reviews", {}):
+        stage_set = load_stage_set("harness")
+    return stage_set, stage_set["reviews"]["Analyze"]
+
+
 def analyzed_fingerprint(spec_dir: Path) -> dict:
     """Analyze가 본 문서들의 내용 해시(판정 대상은 stages.json). 닫은 뒤 문서가 바뀌면 그 분석은 낡은 것이다."""
-    return doc_fingerprint(spec_dir, spec_dir, load_stage_set("harness")["reviews"]["Analyze"]["docs"])
+    return doc_fingerprint(spec_dir, git_toplevel(spec_dir) or spec_dir, analysis_review(spec_dir)[1]["docs"])
 
 
 def lint_step_docs(spec_dir: Path) -> list[dict]:
@@ -299,6 +311,12 @@ def cmd_preflight(args) -> int:
         emit(stale)
         return 1
 
+    bad = upstream_problem(p["spec_dir"])
+    blocked, upstream_notes = upstream_freshness(p["spec_dir"], p["root_path"])
+    if bad or blocked:
+        emit(bad or blocked)
+        return 1
+
     # hook이 phase별 로그 디렉터리(<phase>/logs)를 찾도록 active-phase 마커를 남긴다.
     # (preflight가 이 마커를 쓰고, hook이 읽는다.)
     try:
@@ -330,6 +348,7 @@ def cmd_preflight(args) -> int:
             "committer_model": execution.get("committer_model", "haiku"),
             "push": execution.get("push", True),
         },
+        **({"upstream_notes": upstream_notes} if upstream_notes else {}),
     })
     return 0
 
@@ -837,6 +856,12 @@ def cmd_close_analyze(args) -> int:
               "unresolved": unresolved})
         return 1
 
+    stage_set, review = analysis_review(spec_dir)
+    bad = unchanged_since_problem(spec_dir, git_toplevel(spec_dir) or spec_dir, stage_set, review) or upstream_problem(spec_dir)
+    if bad:
+        emit(bad)
+        return 1
+
     problems = lint_step_docs(spec_dir)
     if problems:
         emit({"ok": False, "error": "step 문서 형식이 어긋나 Analyze를 닫을 수 없다.",
@@ -872,6 +897,44 @@ def doc_fingerprint(base: Path, root: Path, patterns: list[str]) -> dict:
                 key = ("/" + path.relative_to(root).as_posix()) if pat.startswith("/") else path.relative_to(base).as_posix()
                 digest[key] = hashlib.sha256(path.read_bytes()).hexdigest()[:12]
     return digest
+
+
+def matches_any(key: str, patterns: list[str]) -> bool:
+    """지문 키가 패턴 중 하나에 걸리나. `**`는 그 앞 경로 아래 전부다."""
+    for pat in patterns:
+        if "**" in pat:
+            if key.startswith(pat.split("**")[0]):
+                return True
+        elif fnmatch.fnmatchcase(key, pat):
+            return True
+    return False
+
+
+def unchanged_since_problem(spec_dir: Path, root: Path, stage_set: dict, review: dict) -> dict | None:
+    """앞 검사가 본 문서가 그 뒤 바뀌었으면 앞 검사부터 다시 돌아야 한다."""
+    for prev, docs in review.get("unchanged_since", {}).items():
+        prev_path = spec_dir / stage_set["reviews"][prev]["file"]
+        recorded = read_json(prev_path).get("fingerprint", {}) if prev_path.exists() else {}
+        changed = changed_keys({k: v for k, v in recorded.items() if matches_any(k, docs)},
+                               doc_fingerprint(spec_dir, root, docs))
+        if changed:
+            return {"ok": False, "error": f"'{prev}'를 닫은 뒤 바뀐 문서가 있다. 바뀐 문서로 '{prev}'를 다시 돌려 닫아라.",
+                    "changed": changed}
+    return None
+
+
+def upstream_problem(spec_dir: Path) -> dict | None:
+    """가져온 기능 spec 사본이 가져올 때와 같은가. 사본은 읽기 전용이고, 바꾸려면 docs 저장소에서 버전을 올린다."""
+    meta_path = spec_dir / "upstream.json"
+    if not meta_path.exists():
+        return None
+    recorded = read_json(meta_path).get("files", {})
+    current = doc_fingerprint(spec_dir / "upstream", spec_dir / "upstream", ["**/*"])
+    changed = changed_keys(recorded, current)
+    if changed:
+        return {"ok": False, "error": "가져온 기능 spec 사본(upstream/)이 바뀌었다. 사본은 고치지 않는다. "
+                "요구를 바꿔야 하면 docs 저장소에서 기능 변경으로 버전을 올리고 다시 가져온다.", "changed": changed}
+    return None
 
 
 def changed_keys(recorded: dict, current: dict) -> list[str]:
@@ -938,16 +1001,10 @@ def cmd_close_review(args) -> int:
               "hint": "고쳤다면 다시 검사해 그 발견이 사라진 것을 확인하라.", "unresolved": unresolved})
         return 1
 
-    # 앞 검사가 본 문서가 그 뒤 바뀌었으면 앞 검사부터 다시 돌아야 한다.
-    for prev, docs in review.get("unchanged_since", {}).items():
-        prev_path = spec_dir / stage_set["reviews"][prev]["file"]
-        recorded = read_json(prev_path).get("fingerprint", {}) if prev_path.exists() else {}
-        changed = changed_keys({k: v for k, v in recorded.items() if k in docs},
-                               doc_fingerprint(spec_dir, root, docs))
-        if changed:
-            emit({"ok": False, "error": f"'{prev}'를 닫은 뒤 바뀐 문서가 있다. 바뀐 문서로 '{prev}'를 다시 돌려 닫아라.",
-                  "changed": changed})
-            return 1
+    bad = unchanged_since_problem(spec_dir, root, stage_set, review) or upstream_problem(spec_dir)
+    if bad:
+        emit(bad)
+        return 1
 
     result["closed_at"] = stamp()
     result["fingerprint"] = current
@@ -1018,7 +1075,7 @@ def freeze_problems(spec_dir: Path, root: Path, stage_set: dict, version: str) -
         inherited = [d for r in reviews.values() for d in r.get("unchanged_since", {}).get(title, [])]
         docs = inherited or review["docs"]
         if inherited:
-            recorded = {k: v for k, v in recorded.items() if k in inherited}
+            recorded = {k: v for k, v in recorded.items() if matches_any(k, inherited)}
         changed = changed_keys(recorded, doc_fingerprint(spec_dir, root, docs))
         if changed:
             problems.append(f"'{title}'를 닫은 뒤 바뀐 문서가 있다: {', '.join(changed)}")
@@ -1049,6 +1106,112 @@ def freeze_problems(spec_dir: Path, root: Path, stage_set: dict, version: str) -
         else:
             problems.append(f"{latest} 다음 버전은 {fid}-v{lmaj}.{lmin + 1}(동결 문서 그대로) 또는 {fid}-v{lmaj + 1}이다.")
     return problems
+
+
+def upstream_repo(root: Path) -> tuple[Path | None, dict, str | None]:
+    """(docs 저장소 경로, upstream 설정, 오류)."""
+    up = instance_config.load_config(root).get("upstream")
+    if not isinstance(up, dict) or not up.get("path"):
+        return None, {}, "설정(.spec-harness/config.json)에 upstream.path가 없다. docs 저장소의 로컬 체크아웃 경로를 적는다."
+    docs = (root / up["path"]).resolve()
+    if git_toplevel(docs) is None:
+        return None, up, f"upstream.path가 git 저장소가 아니다: {docs}"
+    return docs, up, None
+
+
+def feature_tags(docs: Path, fid: str) -> list[str]:
+    tags = [t for t in git_ops.run_git(str(docs), "tag", "-l", f"{fid}-v*").stdout.split() if _parse_version(t)]
+    return sorted(tags, key=lambda t: _parse_version(t)[1:])
+
+
+def cmd_import_feature(args) -> int:
+    """docs 저장소의 동결 태그에서 기능 spec을 가져와 <spec>/upstream/에 읽기 전용으로 둔다.
+
+    가져오는 것은 기능 폴더의 spec·시나리오·계약과, 같은 커밋의 용어집·domain·openapi다.
+    파일마다 해시를 upstream.json에 남겨 검사 닫기와 preflight가 사본이 바뀌지 않았는지 본다.
+    """
+    spec_dir = Path(args.spec_dir).resolve()
+    root = git_toplevel(spec_dir.parent if not spec_dir.exists() else spec_dir) or Path.cwd()
+    docs, up, err = upstream_repo(root)
+    if err:
+        emit({"ok": False, "error": err})
+        return 1
+    parsed = _parse_version(args.version)
+    if parsed is None:
+        emit({"ok": False, "error": f"버전 형식이 아니다: {args.version} (예: F01-v1)"})
+        return 1
+    fid = parsed[0]
+    if args.version not in feature_tags(docs, fid):
+        emit({"ok": False, "error": f"docs 저장소에 태그 {args.version}가 없다. 동결된 버전만 가져온다.",
+              "available": feature_tags(docs, fid)})
+        return 1
+
+    feature_root = instance_config.load_config(docs).get("feature_root") or "features"
+    listed = git_ops.run_git(str(docs), "ls-tree", "-r", "--name-only", args.version).stdout.split("\n")
+    folders = sorted({n.split("/")[1] for n in listed if n.startswith(f"{feature_root}/{fid}-") and n.count("/") >= 2})
+    if len(folders) != 1:
+        emit({"ok": False, "error": f"{args.version}에서 {fid} 기능 폴더를 하나로 찾지 못했다.", "found": folders})
+        return 1
+    folder = f"{feature_root}/{folders[0]}"
+    wanted = {f"{folder}/{n}": n for n in ("spec.md", "scenarios.md", "contract.md")}
+    wanted.update({n: n for n in listed if n == "glossary.md" or (n.startswith("domain/") and n.endswith(".md"))})
+    wanted.update({n: "openapi.yaml" for n in listed if n == "api/openapi.yaml"})
+
+    dest = spec_dir / "upstream"
+    meta_path = spec_dir / "upstream.json"
+    previous = read_json(meta_path).get("version") if meta_path.exists() else None
+    if dest.exists():
+        for f in dest.rglob("*"):
+            if f.is_file():
+                f.chmod(0o644)
+        for f in sorted(dest.rglob("*"), reverse=True):
+            f.unlink() if f.is_file() else f.rmdir()
+    files = {}
+    for src, rel in wanted.items():
+        if src not in listed:
+            continue
+        shown = subprocess.run(["git", "show", f"{args.version}:{src}"], cwd=docs, capture_output=True)
+        if shown.returncode != 0:
+            continue
+        out = dest / rel
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_bytes(shown.stdout)
+        out.chmod(0o444)
+        files[rel] = hashlib.sha256(shown.stdout).hexdigest()[:12]
+    commit = git_ops.run_git(str(docs), "rev-parse", f"{args.version}^{{commit}}").stdout.strip()
+    meta = {"feature": fid, "version": args.version, "folder": folder,
+            "source": {"path": up["path"], "commit": commit}, "files": dict(sorted(files.items())),
+            "imported_at": stamp()}
+    if previous and previous != args.version:
+        meta["previous_version"] = previous
+    spec_dir.mkdir(parents=True, exist_ok=True)
+    write_json(meta_path, meta)
+    emit({"ok": True, "version": args.version, "files": sorted(files), "previous_version": meta.get("previous_version")})
+    return 0
+
+
+def upstream_freshness(spec_dir: Path, root: Path) -> tuple[dict | None, list[str]]:
+    """(막을 오류, 알림). docs 저장소에 가져온 것보다 새 버전이 있는지 본다."""
+    meta_path = spec_dir / "upstream.json"
+    if not meta_path.exists():
+        return None, []
+    version = read_json(meta_path).get("version", "")
+    parsed = _parse_version(version)
+    docs, up, err = upstream_repo(root)
+    if err or parsed is None:
+        return None, [f"docs 저장소에서 새 버전을 확인하지 못했다: {err or version}"]
+    fid, major, minor = parsed
+    newer = [t for t in feature_tags(docs, fid) if _parse_version(t)[1:] > (major, minor)]
+    if not newer:
+        return None, []
+    latest = newer[-1]
+    if _parse_version(latest)[1] > major:
+        return {"ok": False, "error": f"docs 저장소에 비호환 새 버전 {latest}가 있다(가져온 것은 {version}). "
+                "CHANGELOG에서 바뀐 것을 확인하고 import-feature로 다시 가져온 뒤 Scope부터 다시 본다."}, []
+    note = f"docs 저장소에 호환 새 버전 {latest}가 있다(가져온 것은 {version})."
+    if up.get("on_newer_compatible") == "block":
+        return {"ok": False, "error": note + " 설정이 block이라 막는다. 다시 가져온 뒤 실행한다."}, []
+    return None, [note]
 
 
 def cmd_freeze(args) -> int:
@@ -1173,6 +1336,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_review.add_argument("--stage", required=True, help="검사 단계 제목")
     p_review.add_argument("--edited", default="", help="검사 뒤 문서를 고쳤고 사용자가 확인한 경우 그 이유")
     p_review.set_defaults(func=cmd_close_review)
+
+    p_import = sub.add_parser("import-feature", help="docs 저장소의 동결 태그에서 기능 spec을 upstream/으로 가져옴")
+    p_import.add_argument("spec_dir", help="구현 spec 디렉터리")
+    p_import.add_argument("--version", required=True, help="예: F01-v1.1")
+    p_import.set_defaults(func=cmd_import_feature)
 
     p_freeze = sub.add_parser("freeze", help="기능 spec 동결 확인, --tag면 태그 생성")
     p_freeze.add_argument("spec_dir", help="기능 spec 디렉터리")

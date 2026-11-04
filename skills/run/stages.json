@@ -48,5 +48,35 @@
       }
     },
     "frozen_docs": ["spec.md", "scenarios.md#불변", "contract.md"]
+  },
+  "implement": {
+    "stages": [
+      { "title": "Import", "group": "가져오기" },
+      { "title": "Scope", "group": "명세" },
+      { "title": "Clarify", "group": "명세" },
+      { "title": "Verification", "group": "명세" },
+      { "title": "Design", "group": "설계" },
+      { "title": "Design Review", "group": "설계" },
+      { "title": "Steps", "group": "변환·검증" },
+      { "title": "Analyze", "group": "변환·검증" },
+      { "title": "Execution", "group": "실행" },
+      { "title": "PR Review", "group": "실행" },
+      { "title": "Root Sync", "group": "실행" }
+    ],
+    "execution": "Execution",
+    "set_stage": ["Execution", "PR Review", "Root Sync"],
+    "reviews": {
+      "Design Review": {
+        "file": "review-design.json",
+        "docs": ["spec.md", "verification.md", "plan.md", "architecture.md", "data-model.md", "db-schema.md", "api-spec.md", "adr.md", "screens.md", "data-layer.md", "upstream/**/*"]
+      },
+      "Analyze": {
+        "file": "analysis.json",
+        "docs": ["spec.md", "verification.md", "plan.md", "architecture.md", "data-model.md", "db-schema.md", "api-spec.md", "adr.md", "screens.md", "data-layer.md", "phases/*/step*.md", "upstream/**/*"],
+        "unchanged_since": {
+          "Design Review": ["spec.md", "verification.md"]
+        }
+      }
+    }
   }
 }

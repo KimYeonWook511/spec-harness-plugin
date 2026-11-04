@@ -92,7 +92,7 @@ step 하나가 커밋 하나다. 실패하면 같은 step을 최대 3회까지 �
 
 ## 저장소를 나눴다면
 
-서버와 앱처럼 저장소가 나뉘어 있으면, 공유 docs 저장소에서 `/spec-harness:feature`로 기능 spec을 먼저 확정·동결한다. 각 구현 저장소는 그 버전을 받아 구현한다. 어떤 작업을 어디서 하는지는 `skills/feature/SKILL.md`의 첫 표를 본다.
+서버와 앱처럼 저장소가 나뉘어 있으면, 공유 docs 저장소에서 `/spec-harness:feature`로 기능 spec을 먼저 확정·동결한다. 각 구현 저장소는 `/spec-harness:implement`로 그 버전을 받아 구현한다. 어떤 작업을 어디서 하는지는 `skills/feature/SKILL.md`의 첫 표를 본다.
 
 ## 돌아보려면
 
