@@ -15,6 +15,12 @@
 
 ## 호출
 
+띄우기 직전에 검사 대상 문서를 고정한다. 닫을 때 이 고정본과 대조해, 검사가 본 문서와 닫는 문서가 같은지 확인한다.
+
+```bash
+python3 "<SKILL_DIR>/scripts/execute.py" start-review <SPEC_ROOT>/<spec-name> --stage Analyze
+```
+
 여섯을 한 번에 띄운다. 각 프롬프트에 아래를 넣는다.
 
 - spec 폴더 경로 `<SPEC_ROOT>/<spec-name>/`
@@ -56,6 +62,7 @@ python3 "<SKILL_DIR>/scripts/execute.py" close-analyze <SPEC_ROOT>/<spec-name>
 
 - **CRITICAL은 근거를 적은 반려만 통과한다.** `fixed`는 막힌다 — "고치기로 했다"는 의사일 뿐이고, 해소는 **다시 분석해 그 발견이 사라지는 것**으로만 확인된다.
 - step 문서의 AC 파싱 계약(`## Acceptance Criteria` 헤더·명령 블록·`expect:` 값·`## 검증 대상`)이 어긋나면 닫지 않는다. 이것이 깨져 있으면 Execution에서 step마다 같은 실패를 반복한다.
+- 검사가 끝난 뒤 판정 대상 문서를 고쳤으면 닫히지 않는다. 다시 검사하는 것이 원칙이고, 문구 수준이라 다시 검사할 필요가 없다면 바뀐 파일과 이유를 사용자에게 알리고 확인받은 뒤 `--edited "<이유>"`로 닫는다. 그 이유와 파일은 결과 파일의 `edited_after_review`에 남는다.
 - 통과하면 그 시점 문서의 fingerprint를 `analysis.json`에 남긴다. 이후 문서가 바뀌면 preflight가 낡은 분석을 잡아 재분석을 요구한다.
 - 수정은 자동 적용하지 않는다 — 사용자가 어디로 되돌아갈지(Specify·Clarify·Design) 정해 사람이 고친다.
 

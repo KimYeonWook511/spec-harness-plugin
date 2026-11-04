@@ -6,6 +6,7 @@
 
 | | Spec Review | Contract Review |
 | --- | --- | --- |
+| 검사 대상 고정 (검사관을 띄우기 직전) | `python3 "<EXEC>" start-review <F> --stage "Spec Review"` | `python3 "<EXEC>" start-review <F> --stage "Contract Review"` |
 | 결과 파일 | `<F>/review-1.json` | `<F>/review-2.json` |
 | 닫기 | `python3 "<EXEC>" close-review <F> --stage "Spec Review"` | `python3 "<EXEC>" close-review <F> --stage "Contract Review"` |
 
@@ -50,6 +51,8 @@
 | clarity | 모든 오류에 앱이 할 일이 있나. 용어가 spec·glossary·contract·openapi에서 같은가 |
 
 ## 닫은 뒤
+
+검사가 끝난 뒤 판정 대상 문서를 고쳤으면 닫히지 않는다. 다시 검사하는 것이 원칙이고, 문구 수준이라 다시 검사할 필요가 없다면 바뀐 파일과 이유를 사용자에게 알리고 확인받은 뒤 `--edited "<이유>"`로 닫는다. 그 이유와 파일은 결과 파일의 `edited_after_review`에 남는다.
 
 `close-review`가 판정 대상 문서의 지문을 결과 파일에 남기고 그 단계를 `completed`로 둔다. Contract Review는 Spec Review 이후 `spec.md`·`scenarios.md`가 바뀌었으면 닫히지 않는다 — 계약을 만들다 요구를 고쳤다면 Spec Review부터 다시 돌린다. domain·glossary는 그 사이 Domain 단계가 확정하므로 바뀌어도 된다.
 

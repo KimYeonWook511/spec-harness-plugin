@@ -19,6 +19,7 @@ JavaScript workflow(spec-harness:execute)로 옮겨갔고, execute.py는 **workf
   export-history  phase index·ac-output의 실행 이력을 execution-history.json으로 모음 (Root Sync에서 _archive로 옮기기 전)
   lint-steps      step 문서의 Acceptance Criteria 파싱 계약 검사 (실행하지 않고 형식만)
   close-analyze   analysis.json의 CRITICAL 처리·step 형식을 확인하고 Analyze(7)를 닫음 + fingerprint 기록
+  start-review    검사관을 띄우기 직전에 검사 대상 문서의 지문을 고정
   close-review    stages.json에 정의된 검사 단계를 확인하고 닫음 + fingerprint 기록
   freeze          기능 spec 동결 조건 확인, --tag면 버전 태그 생성
 
@@ -166,24 +167,9 @@ def update_workflow_item(checklist_dir: Path, title: str, status: str) -> bool:
     return matched
 
 
-# Analyze가 판정한 문서들. 실행 상태 파일(index.json·checklist)은 넣지 않는다 — 실행 중 바뀐다.
-_ANALYZED_DOCS = (
-    "spec.md", "plan.md", "scenarios.md", "architecture.md",
-    "data-model.md", "db-schema.md", "api-spec.md", "adr.md",
-)
-
-
 def analyzed_fingerprint(spec_dir: Path) -> dict:
-    """Analyze가 본 문서들의 내용 해시. 닫은 뒤 문서가 바뀌면 그 분석은 낡은 것이다."""
-    digest = {}
-    for name in _ANALYZED_DOCS:
-        path = spec_dir / name
-        if path.exists():
-            digest[name] = hashlib.sha256(path.read_bytes()).hexdigest()[:12]
-    for step in sorted((spec_dir / "phases").glob("*/step*.md")):
-        key = step.relative_to(spec_dir).as_posix()
-        digest[key] = hashlib.sha256(step.read_bytes()).hexdigest()[:12]
-    return digest
+    """Analyze가 본 문서들의 내용 해시(판정 대상은 stages.json). 닫은 뒤 문서가 바뀌면 그 분석은 낡은 것이다."""
+    return doc_fingerprint(spec_dir, spec_dir, load_stage_set("harness")["reviews"]["Analyze"]["docs"])
 
 
 def lint_step_docs(spec_dir: Path) -> list[dict]:
@@ -525,12 +511,19 @@ def cmd_reset_step(args) -> int:
 
 
 def cmd_init_checklist(args) -> int:
-    """spec 레벨 checklist를 stages.json의 단계 정의로 만든다. 이미 있으면 그대로 둔다."""
+    """spec 레벨 checklist를 stages.json의 단계 정의로 만든다. 이미 있으면 그대로 두고, --reset이면 끝난 checklist를 새로 만든다."""
     spec_dir = Path(args.spec_dir).resolve()
     path = spec_dir / "workflow-checklist.json"
-    if path.exists():
+    if path.exists() and not args.reset:
         emit({"ok": True, "path": str(path), "created": False})
         return 0
+    if path.exists():
+        # 끝난 작업의 진행 상태만 지운다. 진행 중인 작업을 날리지 않는다.
+        old = read_json(path)
+        unfinished = [it.get("title") for it in old.get("items", []) if it.get("status") != "completed"]
+        if unfinished:
+            emit({"ok": False, "error": "끝나지 않은 작업의 checklist라 초기화하지 않는다.", "incomplete": unfinished})
+            return 1
     stage_set = load_stage_set(args.workflow)
     if stage_set is None:
         emit({"ok": False, "error": f"workflow '{args.workflow}'는 정의되지 않았다(stages.json)."})
@@ -752,6 +745,59 @@ def unresolved_critical(findings: list) -> list[dict]:
     return unresolved
 
 
+def cmd_start_review(args) -> int:
+    """검사관을 띄우기 직전에 검사 대상 문서의 지문을 checklist에 고정한다.
+
+    닫을 때 이 지문과 대조해, 검사가 본 문서와 닫는 문서가 같은지 확인한다.
+    """
+    spec_dir = Path(args.spec_dir).resolve()
+    checklist, stage_set, err = load_spec_checklist(spec_dir)
+    if err:
+        emit({"ok": False, "error": err})
+        return 1
+    review = stage_set.get("reviews", {}).get(args.stage)
+    if review is None:
+        emit({"ok": False, "error": f"'{args.stage}'는 이 workflow의 검사 단계가 아니다.",
+              "reviews": sorted(stage_set.get("reviews", {}))})
+        return 1
+    pending = incomplete_before(checklist, stage_set, args.stage)
+    if pending:
+        emit({"ok": False, "error": f"'{args.stage}' 앞 단계가 끝나지 않았다.", "incomplete": pending})
+        return 1
+    fingerprint = doc_fingerprint(spec_dir, git_toplevel(spec_dir) or spec_dir, review["docs"])
+    ts = stamp()
+    for item in checklist["items"]:
+        if item.get("title") == args.stage:
+            item["status"] = "in_progress"
+            item.setdefault("started_at", ts)
+            item.pop("completed_at", None)
+            item["inspected_at"] = ts
+            item["inspected_fingerprint"] = fingerprint
+    write_json(spec_dir / "workflow-checklist.json", checklist)
+    emit({"ok": True, "stage": args.stage, "inspected_files": len(fingerprint)})
+    return 0
+
+
+def inspection_check(spec_dir: Path, checklist: dict, stage: str, result_path: Path,
+                     current: dict, edited: str) -> tuple[dict | None, dict | None]:
+    """(오류, 검사 뒤 수정 기록). 검사가 본 문서와 지금 문서가 같은지, 결과가 고정 뒤에 쓰였는지 본다."""
+    item = next((it for it in checklist.get("items", []) if it.get("title") == stage), {})
+    inspected = item.get("inspected_fingerprint")
+    if not inspected:
+        return {"ok": False, "error": f"'{stage}' 검사 대상이 고정되지 않았다.",
+                "hint": f"검사관을 띄우기 전에 start-review --stage \"{stage}\"를 실행하고 검사를 다시 돌려라."}, None
+    # 문서를 고친 뒤 고정을 다시 하는 길을 막는다. 결과는 고정 뒤에 쓰여야 한다.
+    if result_path.stat().st_mtime < datetime.fromisoformat(item["inspected_at"]).timestamp():
+        return {"ok": False, "error": f"{result_path.name}이 검사 대상을 고정하기 전에 쓰였다. 검사를 다시 돌려라."}, None
+    changed = changed_keys(inspected, current)
+    if not changed:
+        return None, None
+    if not edited.strip():
+        return {"ok": False, "error": "검사한 뒤 바뀐 문서가 있다. 다시 검사하거나, 바뀐 내용을 사용자에게 알리고 "
+                "확인받은 뒤 --edited \"<이유>\"로 닫아라.", "changed": changed}, None
+    return None, {"files": changed, "reason": edited.strip(), "at": stamp()}
+
+
 def cmd_close_analyze(args) -> int:
     """Analyze(7)를 닫는다.
 
@@ -777,6 +823,13 @@ def cmd_close_analyze(args) -> int:
         emit({"ok": False, "error": "analysis.json의 findings가 목록이 아니다."})
         return 1
 
+    current = analyzed_fingerprint(spec_dir)
+    bad, edited = inspection_check(spec_dir, read_json(spec_dir / "workflow-checklist.json"), "Analyze",
+                                   analysis_path, current, args.edited)
+    if bad:
+        emit(bad)
+        return 1
+
     unresolved = unresolved_critical(findings)
     if unresolved:
         emit({"ok": False, "error": "CRITICAL이 남아 Analyze를 닫을 수 없다. 근거를 적은 반려만 통과한다.",
@@ -791,7 +844,9 @@ def cmd_close_analyze(args) -> int:
         return 1
 
     analysis["closed_at"] = stamp()
-    analysis["fingerprint"] = analyzed_fingerprint(spec_dir)
+    analysis["fingerprint"] = current
+    if edited:
+        analysis["edited_after_review"] = edited
     write_json(analysis_path, analysis)
 
     if not update_workflow_item(spec_dir, "Analyze", "completed"):
@@ -872,6 +927,11 @@ def cmd_close_review(args) -> int:
     if not isinstance(findings, list):
         emit({"ok": False, "error": f"{review['file']}의 findings가 목록이 아니다."})
         return 1
+    current = doc_fingerprint(spec_dir, root, review["docs"])
+    bad, edited = inspection_check(spec_dir, checklist, args.stage, result_path, current, args.edited)
+    if bad:
+        emit(bad)
+        return 1
     unresolved = unresolved_critical(findings)
     if unresolved:
         emit({"ok": False, "error": f"CRITICAL이 남아 '{args.stage}'를 닫을 수 없다. 근거를 적은 반려만 통과한다.",
@@ -890,7 +950,9 @@ def cmd_close_review(args) -> int:
             return 1
 
     result["closed_at"] = stamp()
-    result["fingerprint"] = doc_fingerprint(spec_dir, root, review["docs"])
+    result["fingerprint"] = current
+    if edited:
+        result["edited_after_review"] = edited
     write_json(result_path, result)
     if not update_workflow_item(spec_dir, args.stage, "completed"):
         emit({"ok": False, "error": f"checklist에서 '{args.stage}' 항목을 찾지 못했다."})
@@ -905,6 +967,34 @@ _VERSION_RE = re.compile(r"^(F\d+)-v(\d+)(?:\.(\d+))?$")
 def _parse_version(tag: str):
     m = _VERSION_RE.match(tag)
     return (m.group(1), int(m.group(2)), int(m.group(3) or 0)) if m else None
+
+
+def invariant_rows(text: str) -> list[str]:
+    """표에서 `불변`으로 표시한 행만 모은다. 순서는 뜻이 아니므로 정렬한다."""
+    rows = []
+    for line in text.splitlines():
+        if line.strip().startswith("|"):
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if any(c == "불변" or c.startswith("불변(") for c in cells):
+                rows.append(" | ".join(cells))
+    return sorted(rows)
+
+
+def frozen_changes(spec_dir: Path, root: Path, frozen_docs: list[str], tag: str) -> list[str]:
+    """태그 이후 바뀐 동결 대상. `파일#불변`은 그 파일의 불변 행만 비교한다."""
+    changed = []
+    for entry in frozen_docs:
+        name, _, part = entry.partition("#")
+        rel = (spec_dir / name).relative_to(root).as_posix()
+        if part == "불변":
+            old = git_ops.run_git(str(root), "show", f"{tag}:{rel}")
+            path = root / rel
+            new_text = path.read_text(encoding="utf-8") if path.exists() else ""
+            if invariant_rows(old.stdout if old.returncode == 0 else "") != invariant_rows(new_text):
+                changed.append(f"{name}의 불변 시나리오")
+        elif git_ops.run_git(str(root), "diff", "--quiet", tag, "--", rel).returncode != 0:
+            changed.append(name)
+    return changed
 
 
 def freeze_problems(spec_dir: Path, root: Path, stage_set: dict, version: str) -> list[str]:
@@ -950,14 +1040,12 @@ def freeze_problems(spec_dir: Path, root: Path, stage_set: dict, version: str) -
     else:
         latest = max(tags, key=lambda t: _parse_version(t)[1:])
         lmaj, lmin = _parse_version(latest)[1:]
-        frozen = [(spec_dir / d).relative_to(root).as_posix() for d in stage_set.get("frozen_docs", [])]
-        meaning_changed = git_ops.run_git(str(root), "diff", "--quiet", latest, "--", *frozen).returncode != 0
+        changed_docs = frozen_changes(spec_dir, root, stage_set.get("frozen_docs", []), latest)
         if (major, minor) == (lmaj + 1, 0):
             pass
         elif major == lmaj and minor == lmin + 1:
-            if meaning_changed:
-                problems.append(f"{latest} 이후 {', '.join(stage_set.get('frozen_docs', []))} 중 바뀐 것이 있어 "
-                                f"{fid}-v{lmaj + 1}이어야 한다.")
+            if changed_docs:
+                problems.append(f"{latest} 이후 동결 대상이 바뀌어({', '.join(changed_docs)}) {fid}-v{lmaj + 1}이어야 한다.")
         else:
             problems.append(f"{latest} 다음 버전은 {fid}-v{lmaj}.{lmin + 1}(동결 문서 그대로) 또는 {fid}-v{lmaj + 1}이다.")
     return problems
@@ -1053,6 +1141,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_init = sub.add_parser("init-checklist", help="stages.json의 단계 정의로 spec 레벨 checklist 생성")
     p_init.add_argument("spec_dir", help="spec 디렉터리")
     p_init.add_argument("--workflow", default="harness", help="stages.json의 workflow 이름")
+    p_init.add_argument("--reset", action="store_true", help="모든 단계가 끝난 checklist를 새로 만든다(기능 변경 시작)")
     p_init.set_defaults(func=cmd_init_checklist)
 
     p_stage = sub.add_parser("set-stage", help="spec 레벨 checklist의 Stage 상태 갱신(메인의 Execution 자동 흐름 + PR Review/Root Sync)")
@@ -1074,9 +1163,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_lint.add_argument("spec_dir", help="spec 디렉터리(phases/가 있는 spec 루트)")
     p_lint.set_defaults(func=cmd_lint_steps)
 
+    p_start = sub.add_parser("start-review", help="검사관을 띄우기 직전에 검사 대상 문서를 고정")
+    p_start.add_argument("spec_dir", help="checklist가 있는 디렉터리")
+    p_start.add_argument("--stage", required=True, help="검사 단계 제목")
+    p_start.set_defaults(func=cmd_start_review)
+
     p_review = sub.add_parser("close-review", help="검사 단계를 확인하고 닫음(stages.json의 reviews)")
     p_review.add_argument("spec_dir", help="checklist가 있는 디렉터리")
     p_review.add_argument("--stage", required=True, help="검사 단계 제목")
+    p_review.add_argument("--edited", default="", help="검사 뒤 문서를 고쳤고 사용자가 확인한 경우 그 이유")
     p_review.set_defaults(func=cmd_close_review)
 
     p_freeze = sub.add_parser("freeze", help="기능 spec 동결 확인, --tag면 태그 생성")
@@ -1087,6 +1182,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_close = sub.add_parser("close-analyze", help="analysis.json을 확인하고 Analyze(7)를 completed로 닫음")
     p_close.add_argument("spec_dir", help="spec 디렉터리(workflow-checklist.json이 있는 spec 루트)")
+    p_close.add_argument("--edited", default="", help="검사 뒤 문서를 고쳤고 사용자가 확인한 경우 그 이유")
     p_close.set_defaults(func=cmd_close_analyze)
 
     return parser

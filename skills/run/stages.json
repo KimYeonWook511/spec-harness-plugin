@@ -13,7 +13,13 @@
       { "title": "Root Sync", "group": "실행" }
     ],
     "execution": "Execution",
-    "set_stage": ["Execution", "PR Review", "Root Sync"]
+    "set_stage": ["Execution", "PR Review", "Root Sync"],
+    "reviews": {
+      "Analyze": {
+        "file": "analysis.json",
+        "docs": ["spec.md", "plan.md", "scenarios.md", "architecture.md", "data-model.md", "db-schema.md", "api-spec.md", "adr.md", "phases/*/step*.md"]
+      }
+    }
   },
   "feature": {
     "stages": [
@@ -36,9 +42,11 @@
       "Contract Review": {
         "file": "review-2.json",
         "docs": ["spec.md", "scenarios.md", "contract.md", "/glossary.md", "/domain/*.md", "/api/openapi.yaml"],
-        "unchanged_since": { "Spec Review": ["spec.md", "scenarios.md"] }
+        "unchanged_since": {
+          "Spec Review": ["spec.md", "scenarios.md"]
+        }
       }
     },
-    "frozen_docs": ["spec.md", "scenarios.md", "contract.md"]
+    "frozen_docs": ["spec.md", "scenarios.md#불변", "contract.md"]
   }
 }

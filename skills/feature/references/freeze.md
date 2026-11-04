@@ -2,7 +2,7 @@
 
 기능 spec에 버전 태그를 붙인다. 태그 이후 구현 저장소는 이 버전을 입력으로 삼는다.
 
-1. **버전을 정한다.** 첫 동결은 `F<번호>-v1`. 이후는 `spec.md`·`scenarios.md`·`contract.md`가 직전 태그와 같으면 minor, 다르면 major다. `freeze`가 이 규칙으로 막는다.
+1. **버전을 정한다.** 첫 동결은 `F<번호>-v1`. 이후는 `spec.md`·`contract.md`와 `불변` 시나리오가 직전 태그와 같으면 minor, 다르면 major다(`SKILL.md`의 버전 규칙). `freeze`가 이 규칙으로 막는다.
 2. **CHANGELOG.md에 항목을 쓴다.**
 
    ```markdown

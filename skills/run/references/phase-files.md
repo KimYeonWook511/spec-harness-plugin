@@ -200,6 +200,8 @@ Analyze(7)의 검사관 여섯이 낸 JSON 블록을 메인이 모아 spec 레�
 - `carried_disposition`은 이전 분석에서 근거와 함께 반려된 항목을 다시 발견했을 때 그 근거를 옮긴 것이다.
 - `fingerprint`는 `close-analyze`가 쓴다 — 판정 대상 문서(`spec.md`·`plan.md`·`scenarios.md`·설계 md·`step<N>.md`)의 내용 해시. 진행 상태 파일은 넣지 않는다(실행 중 바뀐다).
 - `coverage`는 추적성 검사관만 채운다.
+- `edited_after_review`는 검사 뒤 문서를 고치고 사용자 확인을 받아 `--edited`로 닫았을 때만 생긴다(`{files, reason, at}`).
+- 검사 대상 고정본은 checklist의 그 단계 항목에 `inspected_at`·`inspected_fingerprint`로 남는다(`start-review`가 쓴다). 결과 파일은 고정 뒤에 쓰여야 닫힌다.
 
 ---
 

@@ -76,11 +76,12 @@ ID는 `F01-FR-001`, `F01-SC-001`, `F01-SCN-001`처럼 기능 번호를 붙인다
 | Scenarios | 모든 요구·완료 기준에 관찰 가능한 시나리오 | 메인 에이전트 |
 | Spec Review | CRITICAL은 근거를 적은 반려만 | `close-review` |
 | Contract Review | CRITICAL은 근거를 적은 반려만 + Spec Review 이후 spec·시나리오 불변 | `close-review` |
+| 두 검사 | `start-review`로 고정한 문서가 닫을 때까지 그대로다(바뀌면 재검사, 또는 사용자 확인 뒤 `--edited`로 사유 기록) | `close-review` |
 | Freeze | 두 검사가 닫혔고 그 뒤 문서가 바뀌지 않았다, CHANGELOG·기능 목록에 항목이 있다, 버전 규칙을 지켰다 | `freeze` |
 | Freeze | 동결된다는 사실을 알리고 사용자가 진행을 밝혔다 | 사용자가 답해야 넘어간다 |
 | Freeze | 태그는 머지된 깨끗한 체크아웃에서만 | `freeze --tag` |
 
-**버전 규칙**: 첫 동결은 `v1`. 동결 문서(`spec.md`·`scenarios.md`·`contract.md`)가 그대로면 minor(`v1.1`), 바뀌었으면 major(`v2`). `freeze`가 직전 태그와 비교해 막는다.
+**버전 규칙**: 첫 동결은 `v1`. `spec.md`·`contract.md`와 `scenarios.md`의 **`불변` 시나리오**가 그대로면 minor(`v1.1`), 하나라도 바뀌면 major(`v2`). `유동` 시나리오만 바뀐 것은 minor다. 불변을 유동으로 내리는 것도 major다. `freeze`가 직전 태그와 비교해 막는다.
 
 단계 정의와 검사별 판정 대상 문서는 `<RUN_DIR>/stages.json`의 `feature`에 있다.
 

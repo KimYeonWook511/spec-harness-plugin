@@ -67,6 +67,7 @@ flowchart TD
 | Design(5) | 원칙 점검 · 동결 고지 | 메인 · 사용자 |
 | **Analyze(7)** | **CRITICAL 중 근거 있는 반려가 아닌 것이 없다** | 🔒 `close-analyze` |
 | **Analyze(7)** | **모든 step에서 AC와 검증 대상이 파싱된다** | 🔒 `close-analyze` |
+| Analyze(7) | 검사한 뒤 문서가 바뀌지 않았다 (바뀌었으면 재검사, 또는 사용자 확인 뒤 사유 기록) | `close-analyze` |
 | **Execution(8)** | **Analyze를 닫은 뒤 문서가 안 바뀌었다** | 🔒 `preflight` |
 | Execution(8) | 1~7이 모두 `completed`다 | 🔒 `preflight` |
 | Execution(8) | AC 각 명령의 exit code가 기대값과 같다 | `verify-ac` 실행 → `reviewer` 대조 |
@@ -174,6 +175,8 @@ CRITICAL·HIGH를 하나씩 처리하고 결과를 `analysis.json`에 남긴다.
 | 고친다 | `{"kind": "fixed"}` | 문서를 고치고 Analyze를 다시 돈다 |
 | 반려한다 | `{"kind": "rejected", "reason": "..."}` | **근거 없이는 기록하지 않는다** |
 | 자세히 본다 | 없음 | 무엇이 어떻게 깨지는지 설명하고 다시 묻는다 |
+
+검사관을 띄우기 직전에 `start-review`가 검사 대상 문서를 고정한다. 검사 뒤 문서를 고치고 그대로 닫는 길을 막기 위해서다.
 
 `close-analyze`는 **`fixed`도 막는다.** "고치기로 했다"는 의사일 뿐이고, 해소는 **다시 분석해 그 발견이 사라지는 것**으로만 확인된다. 닫으면서 그 시점 문서의 해시를 남겨, 이후 문서가 바뀌면 preflight가 낡은 분석을 잡는다.
 
