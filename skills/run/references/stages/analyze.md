@@ -26,7 +26,7 @@ python3 "<SKILL_DIR>/scripts/execute.py" start-review <SPEC_ROOT>/<spec-name> --
 - spec 폴더 경로 `<SPEC_ROOT>/<spec-name>/`
 - 공통 계약 경로 `<PLUGIN_DIR>/skills/run/references/analysis-contract.md`
 - 활성 방법론 이름과 각 manifest 경로 (없으면 없다고 밝힌다)
-- 재분석이면 이전 `analysis.json` 경로
+- 재분석이면 이전 `analysis.json` 경로와 **지난 검사 이후 바뀐 곳**(`git diff`로 뽑은 파일·절 목록). 검사관이 새 발견마다 바뀐 곳에서 나왔는지 적는다
 
 활성 방법론의 `agents` 중 `review` 모드를 가진 것이 있으면 **일곱 번째로 함께 띄운다**(예: ddd → `spec-harness:domain-expert`). 그 리포트는 방법론 관점이라 위 여섯과 나란히 놓는다.
 
@@ -39,10 +39,12 @@ python3 "<SKILL_DIR>/scripts/execute.py" start-review <SPEC_ROOT>/<spec-name> --
 - 같은 지점을 여럿이 지적했으면 하나로 합치고 `reported_by`에 검사관과 각자의 심각도를 함께 적는다. `severity`는 그중 가장 높은 것으로 둔다.
 - **심각도가 엇갈리면 그 사실을 지운 채 합치지 않는다.** 한쪽이 CRITICAL, 다른 쪽이 MEDIUM으로 본 것은 판단이 갈렸다는 뜻이고, 다관점 검사의 가치는 그 이견이 드러나는 데 있다. triage에서 사용자에게 양쪽을 보여준다.
 - 어느 검사관도 발견을 못 냈어도 그 검사관의 `not_applicable`은 남긴다 — 무엇을 보고 없다고 했는지가 근거다.
+- **권고가 서로 부딪히면 표시한다.** 한 검사관의 권고대로 고치면 다른 검사관의 발견이 생기는 경우다. 두 항목에 `conflicts_with`로 서로의 id를 적고, triage에서 함께 보여 준다.
+- 실패 시나리오(`scenario`) 없이 CRITICAL·HIGH로 올라온 발견은 MEDIUM으로 내리고 그 사실을 적는다(`analysis-contract.md`의 심각도 규칙).
 
 ## triage — 항목별로 처리한다
 
-CRITICAL과 HIGH를 `AskUserQuestion`으로 처리한다(한 호출에 최대 4개씩 묶는다). MEDIUM·LOW는 기록만 남기고 묻지 않는다.
+CRITICAL과 HIGH를 `AskUserQuestion`으로 처리한다(한 호출에 최대 4개씩 묶는다). 각 항목은 요약이 아니라 **실패 시나리오와 근거**로 보여 준다. MEDIUM·LOW는 묻지 않고 한 묶음으로 보여 준 뒤 "모두 고친다 / 기록만 남긴다"를 한 번에 묻는다.
 
 | 선택 | 기록 | 뜻 |
 | --- | --- | --- |
@@ -51,6 +53,18 @@ CRITICAL과 HIGH를 `AskUserQuestion`으로 처리한다(한 호출에 최대 4�
 | 자세히 본다 | 기록 없음 | 어떤 요구·시나리오가 어떻게 깨지는지 설명하고 다시 묻는다 |
 
 이견이 있는 항목은 선택지를 보여주기 전에 **누가 무엇을 다르게 봤는지** 먼저 알린다.
+
+**고칠 때는 `same_kind`까지 함께 고친다.** 지적된 한 곳만 고치면 같은 종류의 다른 곳이 다음 검사에서 새 발견으로 돌아온다.
+
+## 재검사와 끝내는 기준
+
+고친 뒤 다시 검사하면, 새 발견을 `origin`별로 세어 사용자에게 보고한다.
+
+| 새 CRITICAL·HIGH가 | 뜻 | 할 일 |
+| --- | --- | --- |
+| 바뀐 곳에서만 나오고 회차마다 준다 | 정상 수렴 | 처리하고 다시 검사 |
+| 바뀌지 않은 곳에서 나온다 | 지난 검사가 놓친 것 | 처리하되, 고친 것 때문에 생긴 문제가 아니라고 알린다 |
+| 바뀐 곳에서 두 회차 연속 줄지 않는다 | 고칠 때마다 문서가 깊어지고 있다 | 멈추고 사용자에게 보인다. 계속 깊이 들어갈지, 남은 것을 근거와 함께 반려할지 사용자가 정한다 |
 
 ## 게이트·종료
 
