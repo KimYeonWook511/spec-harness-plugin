@@ -195,7 +195,8 @@ Analyze(7)의 검사관 여섯이 낸 JSON 블록을 메인이 모아 spec 레�
 필드 규칙:
 - `severity`는 `reported_by` 중 **가장 높은 값**이다. 낮춰 적으면 게이트가 열린다.
 - `reported_by`의 심각도가 엇갈리면 그것이 검사관 간 이견이다. 합치면서 지우지 않는다.
-- `disposition`은 triage 결과다. `null`(미처리) / `{"kind":"fixed"}` / `{"kind":"rejected","reason":"..."}`.
+- `disposition`은 triage 결과다. `null`(미처리) / `{"kind":"fixed"}` / `{"kind":"rejected","reason":"..."}` / `{"kind":"deferred"}`(기록만, MEDIUM·LOW).
+- `previous_rounds`는 재검사 전에 옮겨 둔 이전 회차들이다(`[{round, findings}]`). 닫기 명령은 `findings`만 본다.
   **CRITICAL은 `reason`이 있는 `rejected`만 `close-analyze`를 통과한다.**
 - `carried_disposition`은 이전 분석에서 근거와 함께 반려된 항목을 다시 발견했을 때 그 근거를 옮긴 것이다.
 - `fingerprint`는 `close-analyze`가 쓴다 — 판정 대상 문서(`spec.md`·`plan.md`·`scenarios.md`·설계 md·`step<N>.md`)의 내용 해시. 진행 상태 파일은 넣지 않는다(실행 중 바뀐다).
