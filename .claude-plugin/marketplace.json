@@ -5,7 +5,7 @@
     {
       "name": "spec-harness",
       "source": "./",
-      "description": "SDD 하네스 (엔진 + opt-in 방법론)"
+      "description": "명세를 먼저 확정하고, 확정된 명세대로 구현하게 하는 SDD 하네스"
     }
   ]
 }
