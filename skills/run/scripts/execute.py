@@ -893,6 +893,9 @@ def cmd_close_analyze(args) -> int:
 
 
 def git_toplevel(start: Path) -> Path | None:
+    # 없는 폴더에서 git을 실행하면 subprocess가 예외를 던져, 안내 대신 traceback이 나간다.
+    if not start.is_dir():
+        return None
     r = git_ops.run_git(str(start), "rev-parse", "--show-toplevel")
     return Path(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip() else None
 
