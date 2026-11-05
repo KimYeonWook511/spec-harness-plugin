@@ -6,6 +6,8 @@
 - 통과 기준은 실행 명령이다. step마다 Acceptance Criteria 명령을 돌려 exit code로 판정한다.
 - 구현한 에이전트와 검토하는 에이전트가 다르다.
 
+---
+
 ## 어떤 skill을 쓰나
 
 | 상황 | skill |
@@ -15,6 +17,8 @@
 | 위의 구현 저장소에서 동결된 기능 spec을 가져와 구현 | [`/spec-harness:implement`](skills/implement/SKILL.md) |
 | 끝난 작업의 실행 기록에서 반복되는 실패 찾기 | [`/spec-harness:retro`](skills/retro/SKILL.md) |
 | 흐름과 내가 개입할 지점 안내 | [`/spec-harness:guide`](skills/guide/SKILL.md) |
+
+---
 
 ## run — 한 저장소에서
 
@@ -88,6 +92,8 @@ flowchart TD
 
 멈춘 step은 사람이 원인을 고치고 `reset-step`으로 되돌려야 다시 돈다. 같은 실패를 반복하지 않기 위해서다.
 
+---
+
 ## 저장소를 나눌 때 — feature · implement
 
 ```mermaid
@@ -140,6 +146,8 @@ flowchart TB
 | 8 Analyze | run의 같은 단계. 검사 범위는 [design-review.md](skills/implement/references/design-review.md#analyze에-더하는-것) |
 | 9 Execution · 10 PR Review · 11 Root Sync | run의 같은 단계. 다른 점은 [implement SKILL](skills/implement/SKILL.md#911-execution--pr-review--root-sync) |
 
+---
+
 ## 설치
 
 나만 쓸 때:
@@ -176,7 +184,11 @@ claude plugin marketplace add KimYeonWook511/spec-harness-plugin --scope project
 
 새 버전은 `/plugin marketplace update KimYeonWook511-harness`로 받는다.
 
+---
+
 ## 저장소 설정
+
+### `.spec-harness/config.json` — 팀이 공유
 
 설정이 없어도 동작한다. 이때 규칙 문서는 `CLAUDE.md`만 읽는다. 바꾸고 싶은 것만 `.spec-harness/config.json`에 적고 커밋한다.
 
@@ -184,7 +196,6 @@ claude plugin marketplace add KimYeonWook511/spec-harness-plugin --scope project
 {
   "rule_docs": ["docs/coding-rules.md"],
   "commit_rule_docs": ["docs/commit-rules.md"],
-  "run_root": "docs/spec-harness/specs",
   "methodologies": ["bdd"],
   "workspace": { "base_ref": "develop", "branch_pattern": "<type>/<name>" }
 }
@@ -204,7 +215,9 @@ claude plugin marketplace add KimYeonWook511/spec-harness-plugin --scope project
 | `workspace` | `mode`(`worktree` 기본 · `branch`), `base_ref`(기본은 저장소 기본 브랜치), `branch_pattern`·`worktree_pattern`(`<type>`·`<name>` 치환), `types`(허용할 작업 종류) |
 | `merge.agent` | Root Sync 전에 에이전트가 머지하려 할 때: `ask`(기본) · `root_sync`(막음) · `deny`(모든 머지 막음) |
 
-docs 저장소의 로컬 경로처럼 머신마다 다른 값은 `.spec-harness/local.json`에 두고 커밋하지 않는다. worktree에서 실행해도 메인 체크아웃의 것 하나를 읽는다.
+### `.spec-harness/local.json` — 머신마다 다름, 커밋하지 않음
+
+docs 저장소의 로컬 경로처럼 머신마다 다른 값을 둔다. worktree에서 실행해도 메인 체크아웃의 것 하나를 읽는다.
 
 ```json
 { "docs_repo": "/Users/me/work/product-docs" }
@@ -214,7 +227,9 @@ docs 저장소의 로컬 경로처럼 머신마다 다른 값은 `.spec-harness/
 | --- | --- |
 | `docs_repo` | implement가 기능 spec을 가져오는 docs 저장소의 절대경로. `execute.py set-docs-repo <경로>`로 기록한다 |
 
-`.gitignore`에는 진행 상태·실행 부산물·로컬 설정만 넣는다. spec 문서는 PR에서 보이도록 커밋한다.
+### `.gitignore`
+
+진행 상태·실행 부산물·로컬 설정만 넣는다. spec 문서는 PR에서 보이도록 커밋한다.
 
 ```gitignore
 /.spec-harness/run/
@@ -227,6 +242,8 @@ docs/spec-harness/**/phases/*/logs/
 ```
 
 docs 저장소는 `/.spec-harness/run/`과 `features/*/workflow-checklist.json`만 넣는다.
+
+---
 
 ## 구성
 
