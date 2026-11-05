@@ -24,10 +24,10 @@ docs 저장소가 동결한 기능 spec 버전(`F01-v1`)을 가져와, **어떻�
 - **`<SKILL_DIR>`** — 이 skill의 base directory 절대경로.
 - **`<RUN_DIR>`** — `<SKILL_DIR>/../run`.
 - **`<EXEC>`** — `<RUN_DIR>/scripts/execute.py`.
-- **`<SPEC_ROOT>`** — 설정의 `spec_root`, 없으면 `docs/specs`.
+- **`<SPEC_ROOT>`** — 설정의 `implement_root`, 없으면 `docs/spec-harness/implementations`. 따라 쓰는 `run` 문서의 `<SPEC_ROOT>`도 이 값으로 읽는다.
 - **`<S>`** — 이번 구현 spec 폴더 `<SPEC_ROOT>/<spec-name>`.
 
-설정(`.spec-harness/config.json`)의 `upstream.path`가 docs 저장소의 로컬 체크아웃을 가리켜야 한다. `upstream.on_newer_compatible`은 minor 새 버전(구현을 다시 확인할 필요 없음)이 있을 때 알리기만 할지(`warn`, 기본) 막을지(`block`)다.
+docs 저장소의 로컬 경로는 머신마다 달라 메인 체크아웃의 `.spec-harness/local.json`(커밋하지 않음)의 `docs_repo`에 둔다. 없으면 사용자에게 묻고 `python3 "<EXEC>" set-docs-repo <경로>`로 기록한다. 설정(`.spec-harness/config.json`)의 `upstream.on_newer_compatible`은 minor 새 버전(구현을 다시 확인할 필요 없음)이 있을 때 알리기만 할지(`warn`, 기본) 막을지(`block`)다.
 
 ## 구현 spec 폴더
 
@@ -82,7 +82,7 @@ ID: 가져온 것은 그대로(`F01-FR-003`, `F01-SCN-012`), 이 플랫폼에서
 ### 1. Import
 
 1. `<RUN_DIR>/references/stages/specify.md`의 "작업 공간 준비" 1~2를 따라 작업 공간(worktree)을 만든다.
-2. `python3 "<EXEC>" init-checklist <S> --workflow implement`
+2. `python3 "<EXEC>" init-checklist <S> --workflow implement`. 출력에 `config_notes`가 있으면 사용자에게 알린다.
 3. 사용자에게 가져올 버전을 확인하고 `python3 "<EXEC>" import-feature <S> --version F01-v1`
 4. docs 저장소의 `CHANGELOG.md`에서 이 버전 항목을 읽어, 무엇이 바뀌었는지 사용자에게 알린다. 끝나면 Import를 `completed`로 둔다.
 

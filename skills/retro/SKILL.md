@@ -9,7 +9,8 @@ description: 끝난 spec들의 실행 기록을 돌아보고 반복되는 실패
 
 ## 자리표시자
 
-- **`<SPEC_ROOT>`** — `.spec-harness/config.json`의 `spec_root`, 없으면 `docs/specs`.
+- **`<SPEC_ROOT>`** — `.spec-harness/config.json`의 `run_root`, 없으면 `docs/spec-harness/specs`.
+- **`<IMPLEMENT_ROOT>`** — 같은 설정의 `implement_root`, 없으면 `docs/spec-harness/implementations`.
 - **`<SKILL_DIR>`** — 이 skill의 base directory 절대경로.
 - **`<PLUGIN_DIR>`** — `<SKILL_DIR>`에서 두 단계 위.
 
@@ -32,14 +33,14 @@ description: 끝난 spec들의 실행 기록을 돌아보고 반복되는 실패
 사용자에게 범위를 묻는다. spec 하나로는 반복을 가를 수 없으므로 기본은 최근 5개다.
 
 ```bash
-python3 "<SKILL_DIR>/scripts/collect.py" --archive-root <SPEC_ROOT> --last 5
+python3 "<SKILL_DIR>/scripts/collect.py" --archive-root <SPEC_ROOT> --archive-root <IMPLEMENT_ROOT> --last 5
 ```
 
 Root Sync(루트 문서 반영) 전인 spec을 넣으려면 먼저 이력을 만든 뒤 폴더를 직접 넘긴다.
 
 ```bash
-python3 "<PLUGIN_DIR>/skills/run/scripts/execute.py" export-history <SPEC_ROOT>/<spec-name>
-python3 "<SKILL_DIR>/scripts/collect.py" <SPEC_ROOT>/<spec-name>
+python3 "<PLUGIN_DIR>/skills/run/scripts/execute.py" export-history <작업 폴더>
+python3 "<SKILL_DIR>/scripts/collect.py" <작업 폴더>
 ```
 
 `missing`에 `execution_history: false`로 나온 spec은 `analysis.json`만으로 본다. 그 사실을 기록에 남긴다.

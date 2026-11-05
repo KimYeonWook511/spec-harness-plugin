@@ -23,6 +23,7 @@ JavaScript workflow(spec-harness:execute)로 옮겨갔고, execute.py는 **workf
   close-review    stages.json에 정의된 검사 단계를 확인하고 닫음 + fingerprint 기록
   freeze          기능 spec 동결 조건 확인, --tag면 버전 태그 생성
   import-feature  docs 저장소의 동결 태그에서 기능 spec을 upstream/으로 가져옴 (implement)
+  set-docs-repo   docs 저장소의 로컬 경로를 메인 체크아웃의 .spec-harness/local.json에 기록 (implement)
 
 설계 원칙:
   - 함수 기반: 셔틀 상태가 없고 각 서브커맨드가 한 번 실행되고 끝이므로 클래스가 불필요.
@@ -560,7 +561,9 @@ def cmd_init_checklist(args) -> int:
     ]
     spec_dir.mkdir(parents=True, exist_ok=True)
     write_json(path, {"workflow": args.workflow, "status": "drafting", "items": items})
-    emit({"ok": True, "path": str(path), "created": True, "stages": len(items)})
+    notes = instance_config.load_config(git_toplevel(spec_dir) or Path.cwd())["_notes"]
+    emit({"ok": True, "path": str(path), "created": True, "stages": len(items),
+          **({"config_notes": notes} if notes else {})})
     return 0
 
 
@@ -1122,15 +1125,55 @@ def freeze_problems(spec_dir: Path, root: Path, stage_set: dict, version: str) -
     return problems
 
 
+def main_checkout(start: Path) -> Path | None:
+    """메인 체크아웃 루트. worktree 안에서 불러도 같은 곳을 가리킨다."""
+    r = git_ops.run_git(str(start), "rev-parse", "--git-common-dir")
+    if r.returncode != 0 or not r.stdout.strip():
+        return None
+    return (start / r.stdout.strip()).resolve().parent
+
+
+SET_DOCS_REPO_HINT = "사용자에게 docs 저장소의 로컬 경로를 묻고 `execute.py set-docs-repo <경로>`로 기록한다."
+
+
 def upstream_repo(root: Path) -> tuple[Path | None, dict, str | None]:
     """(docs 저장소 경로, upstream 설정, 오류)."""
     up = instance_config.load_config(root).get("upstream")
-    if not isinstance(up, dict) or not up.get("path"):
-        return None, {}, "설정(.spec-harness/config.json)에 upstream.path가 없다. docs 저장소의 로컬 체크아웃 경로를 적는다."
-    docs = (root / up["path"]).resolve()
+    up = up if isinstance(up, dict) else {}
+    main = main_checkout(root) or root
+    local_path = main / instance_config.LOCAL_RELPATH
+    try:
+        path = json.loads(local_path.read_text(encoding="utf-8")).get("docs_repo")
+    except (OSError, json.JSONDecodeError, AttributeError):
+        path = None
+    if not isinstance(path, str) or not path:
+        return None, up, f"{local_path}에 docs_repo가 없다. " + SET_DOCS_REPO_HINT
+    docs = Path(path).expanduser().resolve()
     if git_toplevel(docs) is None:
-        return None, up, f"upstream.path가 git 저장소가 아니다: {docs}"
+        return None, up, f"docs_repo가 git 저장소가 아니다: {docs}. " + SET_DOCS_REPO_HINT
     return docs, up, None
+
+
+def cmd_set_docs_repo(args) -> int:
+    """docs 저장소의 절대경로를 메인 체크아웃의 로컬 설정에 기록한다."""
+    main = main_checkout(Path.cwd())
+    if main is None:
+        emit({"ok": False, "error": "git 저장소 안에서 실행한다."})
+        return 1
+    docs = Path(args.path).expanduser().resolve()
+    if git_toplevel(docs) is None:
+        emit({"ok": False, "error": f"git 저장소가 아니다: {docs}"})
+        return 1
+    local_path = main / instance_config.LOCAL_RELPATH
+    data = read_json(local_path) if local_path.exists() else {}
+    data["docs_repo"] = str(docs)
+    local_path.parent.mkdir(parents=True, exist_ok=True)
+    write_json(local_path, data)
+    out = {"ok": True, "file": str(local_path), "docs_repo": data["docs_repo"]}
+    if git_ops.run_git(str(main), "check-ignore", "-q", instance_config.LOCAL_RELPATH).returncode != 0:
+        out["warning"] = f"{instance_config.LOCAL_RELPATH}이 .gitignore에 없다. 개인 경로가 커밋되지 않게 `/{instance_config.LOCAL_RELPATH}`를 더한다."
+    emit(out)
+    return 0
 
 
 def feature_tags(docs: Path, fid: str) -> list[str]:
@@ -1146,7 +1189,7 @@ def cmd_import_feature(args) -> int:
     """
     spec_dir = Path(args.spec_dir).resolve()
     root = git_toplevel(spec_dir.parent if not spec_dir.exists() else spec_dir) or Path.cwd()
-    docs, up, err = upstream_repo(root)
+    docs, _, err = upstream_repo(root)
     if err:
         emit({"ok": False, "error": err})
         return 1
@@ -1193,8 +1236,12 @@ def cmd_import_feature(args) -> int:
         out.chmod(0o444)
         files[rel] = hashlib.sha256(shown.stdout).hexdigest()[:12]
     commit = git_ops.run_git(str(docs), "rev-parse", f"{args.version}^{{commit}}").stdout.strip()
+    source = {"commit": commit}
+    remote = git_ops.run_git(str(docs), "remote", "get-url", "origin").stdout.strip()
+    if remote:
+        source["remote"] = remote
     meta = {"feature": fid, "version": args.version, "folder": folder,
-            "source": {"path": up["path"], "commit": commit}, "files": dict(sorted(files.items())),
+            "source": source, "files": dict(sorted(files.items())),
             "imported_at": stamp()}
     if previous and previous != args.version:
         meta["previous_version"] = previous
@@ -1355,6 +1402,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_import.add_argument("spec_dir", help="구현 spec 디렉터리")
     p_import.add_argument("--version", required=True, help="예: F01-v1.1")
     p_import.set_defaults(func=cmd_import_feature)
+
+    p_setrepo = sub.add_parser("set-docs-repo", help="docs 저장소의 로컬 경로를 .spec-harness/local.json에 기록")
+    p_setrepo.add_argument("path", help="docs 저장소의 로컬 체크아웃 경로")
+    p_setrepo.set_defaults(func=cmd_set_docs_repo)
 
     p_freeze = sub.add_parser("freeze", help="기능 spec 동결 확인, --tag면 태그 생성")
     p_freeze.add_argument("spec_dir", help="기능 spec 디렉터리")

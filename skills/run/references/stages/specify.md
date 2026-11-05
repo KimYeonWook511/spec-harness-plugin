@@ -12,7 +12,7 @@
    - 이름 형식의 `<type>`·`<name>`은 위에서 정한 종류·slug로 치환한다.
 
    만든 뒤 그 안(또는 그 브랜치)으로 이동하고, 이동 직후 `pwd`와 `git branch --show-current`로 **의도한 위치·브랜치인지 반드시 확인한다.** 이후 모든 문서 작성·`execute.py` 실행은 이 작업 공간의 루트 기준이다.
-3. **스캐폴딩(checklist 생성)**: worktree 안에 `<SPEC_ROOT>/<spec-name>/` 폴더를 만들고 checklist를 생성한다: `python3 "<SKILL_DIR>/scripts/execute.py" init-checklist <SPEC_ROOT>/<spec-name>`. 이 시점에 10개 Stage 진행 추적 checklist가 존재한다(실행 게이트가 이를 읽는다). **설계 문서(plan·architecture·data-model 등)는 지금 복사하지 않는다 — Design(5, 설계)에서 필요한 것만 템플릿 폴더에서 꺼내 만든다.** `spec.md`도 아래에서 새로 만든다.
+3. **스캐폴딩(checklist 생성)**: worktree 안에 `<SPEC_ROOT>/<spec-name>/` 폴더를 만들고 checklist를 생성한다: `python3 "<SKILL_DIR>/scripts/execute.py" init-checklist <SPEC_ROOT>/<spec-name>`. 출력에 `config_notes`가 있으면 사용자에게 알린다. 이 시점에 10개 Stage 진행 추적 checklist가 존재한다(실행 게이트가 이를 읽는다). **설계 문서(plan·architecture·data-model 등)는 지금 복사하지 않는다 — Design(5, 설계)에서 필요한 것만 템플릿 폴더에서 꺼내 만든다.** `spec.md`도 아래에서 새로 만든다.
 
 > worktree·checklist는 spec당 한 번만 만든다. 재실행이면 이미 있으므로 건너뛴다.
 

@@ -4,7 +4,7 @@
 각 spec 폴더의 execution-history.json·analysis.json을 읽어 반복을 셀 수 있는 형태로 출력한다.
 무엇이 같은 원인인지 묶는 일은 하지 않는다 — 문장 판단이라 메인 에이전트가 한다.
 
-  collect.py --archive-root <SPEC_ROOT> [--last N]   # _archive/pr-<N>-<spec>/ 를 PR 번호 내림차순으로
+  collect.py --archive-root <루트> [--archive-root <루트> ...] [--last N]   # _archive/pr-<N>-<spec>/ 를 PR 번호 내림차순으로
   collect.py <spec-dir> [<spec-dir> ...]             # 폴더를 직접 지정
 """
 from __future__ import annotations
@@ -101,16 +101,16 @@ def summarize_analysis(analysis: dict, category_total: Counter, rejected_total: 
 def main() -> int:
     ap = argparse.ArgumentParser(description="spec 실행 기록 회고 집계")
     ap.add_argument("spec_dirs", nargs="*")
-    ap.add_argument("--archive-root", help="<SPEC_ROOT>. 그 아래 _archive/를 읽는다")
+    ap.add_argument("--archive-root", action="append", default=[],
+                    help="작업 폴더 루트. 그 아래 _archive/를 읽는다. 여러 번 줄 수 있다")
     ap.add_argument("--last", type=int, default=0, help="PR 번호가 큰 순으로 N개만")
     args = ap.parse_args()
 
     dirs = [Path(d).resolve() for d in args.spec_dirs]
-    if args.archive_root:
-        archive = Path(args.archive_root).resolve() / "_archive"
-        found = sorted((d for d in archive.iterdir() if d.is_dir()), key=pr_number, reverse=True) \
-            if archive.is_dir() else []
-        dirs += found[:args.last] if args.last else found
+    archives = [Path(a).resolve() / "_archive" for a in args.archive_root]
+    found = sorted((d for a in archives if a.is_dir() for d in a.iterdir() if d.is_dir()),
+                   key=pr_number, reverse=True)
+    dirs += found[:args.last] if args.last else found
     if not dirs:
         print(json.dumps({"ok": False, "error": "읽을 spec 폴더가 없다"}, ensure_ascii=False))
         return 1

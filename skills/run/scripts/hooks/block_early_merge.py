@@ -25,7 +25,8 @@ import sys
 from pathlib import Path
 
 CONFIG_RELPATH = ".spec-harness/config.json"
-DEFAULT_SPEC_ROOT = "docs/specs"
+# run과 implement가 작업 폴더를 만드는 곳. 키와 기본값은 instance_config.DEFAULTS와 같다.
+WORK_ROOTS = {"run_root": "docs/spec-harness/specs", "implement_root": "docs/spec-harness/implementations"}
 EXECUTION_TITLE = "Execution"
 ROOT_SYNC_TITLE = "Root Sync"
 
@@ -51,8 +52,8 @@ def git_root(start: Path) -> Path | None:
     return None
 
 
-def read_settings(root: Path) -> tuple[Path, str]:
-    """저장소 설정에서 spec 루트와 머지 정책을 한 번에 읽는다. 없거나 깨졌으면 기본값."""
+def read_settings(root: Path) -> tuple[list[Path], str]:
+    """저장소 설정에서 작업 폴더 루트들과 머지 정책을 한 번에 읽는다. 없거나 깨졌으면 기본값."""
     loaded = {}
     cfg = root / CONFIG_RELPATH
     if cfg.exists():
@@ -63,12 +64,14 @@ def read_settings(root: Path) -> tuple[Path, str]:
         if isinstance(parsed, dict):
             loaded = parsed
 
-    value = loaded.get("spec_root")
-    specs_dir = root / value if isinstance(value, str) and value else root / DEFAULT_SPEC_ROOT
+    work_roots = []
+    for key, default in WORK_ROOTS.items():
+        value = loaded.get(key)
+        work_roots.append(root / (value if isinstance(value, str) and value else default))
 
     merge = loaded.get("merge")
     policy = merge.get("agent") if isinstance(merge, dict) else None
-    return specs_dir, policy if policy in POLICIES else DEFAULT_POLICY
+    return work_roots, policy if policy in POLICIES else DEFAULT_POLICY
 
 
 def archived_in_head(root: Path, specs_dir: Path, spec_name: str) -> bool:
@@ -148,13 +151,13 @@ def main() -> int:
     root = git_root(Path(payload.get("cwd") or Path.cwd()).resolve())
     if root is None:
         return 0
-    specs_dir, policy = read_settings(root)
+    work_roots, policy = read_settings(root)
 
     if policy == "deny":
         return emit("deny", "이 저장소는 agent의 PR 머지를 허용하지 않는다"
                             "(`.spec-harness/config.json`의 `merge.agent`가 `deny`). 사람이 직접 머지한다.")
 
-    pending = pending_specs(root, specs_dir)
+    pending = [p for d in work_roots for p in pending_specs(root, d)]
     if not pending:
         return 0
 

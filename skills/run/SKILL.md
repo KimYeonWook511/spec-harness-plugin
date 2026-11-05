@@ -157,7 +157,7 @@ Stage 1~6은 진행하며 작성하고, Stage 7(Analyze)은 `close-analyze`가 �
 
 이 문서의 `<...>`는 실제 값으로 치환해 쓴다.
 
-- **`<SPEC_ROOT>`** — spec 폴더들이 있는 곳. 저장소 설정(`.spec-harness/config.json`)의 `spec_root`가 있으면 그 값, 없으면 `docs/specs`.
+- **`<SPEC_ROOT>`** — spec 폴더들이 있는 곳. 저장소 설정(`.spec-harness/config.json`)의 `run_root`가 있으면 그 값, 없으면 `docs/spec-harness/specs`.
 - **`<SKILL_DIR>`** — 이 스킬(run)의 base directory 절대경로(스킬이 호출될 때 함께 주어진다).
 - **`<PLUGIN_DIR>`** — 이 플러그인의 루트. `<SKILL_DIR>`에서 두 단계 위(`skills/run` → 플러그인 루트)다. 방법론 선언은 `<PLUGIN_DIR>/methodologies/<이름>/manifest.yaml`에 있다.
 - **`<TEMPLATE_DIR>`** — spec 문서 템플릿 폴더. 저장소 설정의 `template_dir`가 있고 그 경로가 실제로 있으면 그것을, 없으면 `<SKILL_DIR>/templates/spec/`을 쓴다.

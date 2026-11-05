@@ -15,6 +15,9 @@ from typing import Optional
 
 CONFIG_RELPATH = ".spec-harness/config.json"
 
+# 머신마다 다른 설정. 커밋하지 않고, 모든 worktree가 메인 체크아웃 루트의 것 하나를 읽는다.
+LOCAL_RELPATH = ".spec-harness/local.json"
+
 # 실행 부산물(진행 마커·로그 증분 상태)이 쌓이는 곳. 휘발 데이터라 저장소가 무시한다.
 RUNTIME_RELPATH = ".spec-harness/run"
 
@@ -27,11 +30,13 @@ DEFAULTS: dict = {
     # spec 문서 템플릿을 저장소가 자기 것으로 쓰고 싶을 때만 지정한다(저장소 루트 기준 상대경로).
     # 없으면 플러그인이 싣고 있는 기본 템플릿을 쓴다 — 템플릿이 없는 저장소에서도 시작할 수 있도록.
     "template_dir": None,
-    # spec 작업 공간이 사는 곳(저장소 루트 기준). 하네스가 spec 폴더를 만들고 찾는 기준점이다.
-    "spec_root": "docs/specs",
+    # run이 spec 폴더를 만드는 곳(저장소 루트 기준).
+    "run_root": "docs/spec-harness/specs",
+    # implement가 구현 폴더를 만드는 곳(저장소 루트 기준).
+    "implement_root": "docs/spec-harness/implementations",
     # 기능 spec이 사는 곳(docs 저장소 루트 기준). feature skill이 쓴다.
     "feature_root": "features",
-    # 구현 저장소가 기능 spec을 가져오는 docs 저장소. {"path": 로컬 체크아웃 경로, "on_newer_compatible": "warn"|"block"}
+    # implement용. {"on_newer_compatible": "warn"|"block"}: docs 저장소에 minor 새 버전이 있을 때 알리기만 할지 막을지.
     "upstream": None,
     # 이 저장소가 켠 방법론 이름 목록(예: ["ddd"]). 비어 있으면 방법론 무관 코어만 돈다.
     # 방법론은 검사·요구 산출물·전용 agent를 더하며, 코어 게이트를 끄지는 못한다.
@@ -102,6 +107,8 @@ def load_config(root_path: Path) -> dict:
     for key in DEFAULTS:
         if key in loaded:
             config[key] = loaded[key]
+    if "spec_root" in loaded:
+        config["_notes"].append(f"spec_root는 run_root로 바뀌어 읽지 않는다. {CONFIG_RELPATH}에서 키 이름을 바꾼다.")
     return config
 
 

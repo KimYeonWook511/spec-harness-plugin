@@ -184,7 +184,7 @@ claude plugin marketplace add KimYeonWook511/spec-harness-plugin --scope project
 {
   "rule_docs": ["docs/coding-rules.md"],
   "commit_rule_docs": ["docs/commit-rules.md"],
-  "spec_root": "docs/specs",
+  "run_root": "docs/spec-harness/specs",
   "methodologies": ["bdd"],
   "workspace": { "base_ref": "develop", "branch_pattern": "<type>/<name>" }
 }
@@ -196,22 +196,34 @@ claude plugin marketplace add KimYeonWook511/spec-harness-plugin --scope project
 | `commit_rule_docs` | 커밋 메시지 규칙 문서 |
 | `reference_docs` | step 문서가 언급할 때만 함께 읽는 참고 문서 |
 | `template_dir` | spec 문서 템플릿을 저장소 것으로 쓸 때 (기본은 플러그인 내장) |
-| `spec_root` | spec 폴더 위치 (기본 `docs/specs`) |
+| `run_root` | run이 spec 폴더를 만드는 곳 (기본 `docs/spec-harness/specs`) |
+| `implement_root` | implement가 구현 폴더를 만드는 곳 (기본 `docs/spec-harness/implementations`) |
 | `feature_root` | docs 저장소의 기능 spec 폴더 위치 (기본 `features`) |
-| `upstream` | implement용. `path`는 docs 저장소의 로컬 경로, `on_newer_compatible`은 minor 새 버전이 있을 때 `warn`(기본) 또는 `block` |
+| `upstream` | implement용. `on_newer_compatible`은 docs 저장소에 minor 새 버전이 있을 때 `warn`(기본) 또는 `block` |
 | `methodologies` | 켤 방법론. `ddd`(도메인 규칙을 어디 둘지), `bdd`(시나리오를 검증 단위로) |
 | `workspace` | `mode`(`worktree` 기본 · `branch`), `base_ref`(기본은 저장소 기본 브랜치), `branch_pattern`·`worktree_pattern`(`<type>`·`<name>` 치환), `types`(허용할 작업 종류) |
 | `merge.agent` | Root Sync 전에 에이전트가 머지하려 할 때: `ask`(기본) · `root_sync`(막음) · `deny`(모든 머지 막음) |
 
-`.gitignore`에는 진행 상태와 실행 부산물만 넣는다. spec 문서는 PR에서 보이도록 커밋한다.
+docs 저장소의 로컬 경로처럼 머신마다 다른 값은 `.spec-harness/local.json`에 두고 커밋하지 않는다. worktree에서 실행해도 메인 체크아웃의 것 하나를 읽는다.
+
+```json
+{ "docs_repo": "/Users/me/work/product-docs" }
+```
+
+| 키 | 뜻 |
+| --- | --- |
+| `docs_repo` | implement가 기능 spec을 가져오는 docs 저장소의 절대경로. `execute.py set-docs-repo <경로>`로 기록한다 |
+
+`.gitignore`에는 진행 상태·실행 부산물·로컬 설정만 넣는다. spec 문서는 PR에서 보이도록 커밋한다.
 
 ```gitignore
 /.spec-harness/run/
-docs/specs/**/workflow-checklist.json
-docs/specs/**/phases/index.json
-docs/specs/**/phases/*/index.json
-docs/specs/**/phases/*/step*-ac-output.json
-docs/specs/**/phases/*/logs/
+/.spec-harness/local.json
+docs/spec-harness/**/workflow-checklist.json
+docs/spec-harness/**/phases/index.json
+docs/spec-harness/**/phases/*/index.json
+docs/spec-harness/**/phases/*/step*-ac-output.json
+docs/spec-harness/**/phases/*/logs/
 ```
 
 docs 저장소는 `/.spec-harness/run/`과 `features/*/workflow-checklist.json`만 넣는다.
